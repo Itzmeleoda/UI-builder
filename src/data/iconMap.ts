@@ -1,0 +1,32 @@
+import {
+  LayoutGrid,
+  PanelsTopLeft,
+  IdCard,
+  ImagePlus,
+  GalleryHorizontal,
+  Search,
+  Table,
+  MousePointerClick,
+  PictureInPicture,
+  ChevronsUpDown,
+  PanelTop,
+  SquareStack,
+  FileCode2,
+  type LucideIcon,
+} from "lucide-react";
+
+export const ICON_MAP: Record<string, LucideIcon> = {
+  LayoutGrid,
+  PanelsTopLeft,
+  IdCard,
+  ImagePlus,
+  GalleryHorizontal,
+  Search,
+  Table,
+  MousePointerClick,
+  PictureInPicture,
+  ChevronsUpDown,
+  PanelTop,
+  SquareStack,
+  FileCode2,
+};
