@@ -6,6 +6,8 @@ import { Toolbar, type ModalKind } from "./components/Toolbar";
 import { ExportModal } from "./components/ExportModal";
 import { ImportModal } from "./components/ImportModal";
 import { SpecModal } from "./components/SpecModal";
+import { AppSettingsModal } from "./components/AppSettingsModal";
+import { FinishModal } from "./components/FinishModal";
 import { useStore } from "./state/store";
 import { Sparkles, Undo2, Redo2, X } from "lucide-react";
 import { cn } from "./utils/cn";
@@ -104,10 +106,10 @@ export default function App() {
         <div className="flex items-start gap-2 bg-indigo-50 border-b border-indigo-100 px-4 py-2 text-[11px] text-indigo-700">
           <Sparkles className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
           <p className="flex-1">
-            <strong>What's new:</strong> 39 components with hundreds of parameter options, 50+ bundled assets (photos, gradients, logos,
-            icons, fonts), page templates, smart alignment guides with snap-to-edge and <em>swap-on-drop</em>, auto-arrange,
-            alignment/distribute tools, a full undo/redo history with labeled steps, and keyboard shortcuts. Export still produces a
-            deterministic, buildable React + Tailwind project from the same spec.
+            <strong>What's new:</strong> buttons, CTAs, nav links and forms are now <em>live</em> — assign actions (link, scroll-to-section,
+            alert, custom JS) and they work right on the canvas <em>and</em> in the exported app. Use <strong>Settings</strong> for
+            app-wide theme/meta customization and <strong>Finish & export</strong> to review wiring, complete the process and download the
+            finished application.
           </p>
           <button onClick={() => setShowNote(false)} className={cn("p-0.5 hover:bg-indigo-100 rounded")}>
             <X className="w-3.5 h-3.5" />
@@ -124,6 +126,8 @@ export default function App() {
       {modal === "export" && <ExportModal onClose={() => setModal(null)} />}
       {modal === "import" && <ImportModal onClose={() => setModal(null)} />}
       {modal === "spec" && <SpecModal onClose={() => setModal(null)} />}
+      {modal === "settings" && <AppSettingsModal onClose={() => setModal(null)} />}
+      {modal === "finish" && <FinishModal onClose={() => setModal(null)} onExport={() => setModal("export")} />}
       <Toasts />
     </div>
   );

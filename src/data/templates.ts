@@ -3,6 +3,7 @@ import type { ComponentSpec, ComponentType, ProjectSpec } from "../types";
 import { COMPONENT_LIBRARY } from "./componentLibrary";
 import { SCHEMA_VERSION } from "../types";
 import { LIBRARY_ASSETS } from "./seedAssets";
+import { DEFAULT_SETTINGS } from "../utils/migrateSpec";
 
 export function inst(type: ComponentType, box: { x: number; y: number; w: number; h: number }, overrides: Record<string, unknown> = {}): ComponentSpec {
   const def = COMPONENT_LIBRARY[type];
@@ -46,6 +47,7 @@ export const TEMPLATES: TemplateDef[] = [
       projectName,
       cols: 12,
       rowHeight: 48,
+      settings: { ...DEFAULT_SETTINGS, pageTitle: projectName },
       assets: LIBRARY_ASSETS,
       components: [
         inst("navbar", { x: 0, y: 0, w: 12, h: 1 }, { logoText: "Lumen" }),
@@ -85,6 +87,7 @@ export const TEMPLATES: TemplateDef[] = [
       projectName,
       cols: 12,
       rowHeight: 48,
+      settings: { ...DEFAULT_SETTINGS, pageTitle: projectName },
       assets: LIBRARY_ASSETS,
       components: [
         inst("stickyHeader", { x: 0, y: 0, w: 12, h: 1 }, { logoText: "Nordic" }),
@@ -118,6 +121,7 @@ export const TEMPLATES: TemplateDef[] = [
       projectName,
       cols: 12,
       rowHeight: 48,
+      settings: { ...DEFAULT_SETTINGS, pageTitle: projectName },
       assets: LIBRARY_ASSETS,
       components: [
         inst("stickyHeader", { x: 0, y: 0, w: 12, h: 1 }, { logoText: "Pulse" }),
@@ -153,6 +157,7 @@ export const TEMPLATES: TemplateDef[] = [
       projectName,
       cols: 12,
       rowHeight: 48,
+      settings: { ...DEFAULT_SETTINGS, pageTitle: projectName },
       assets: LIBRARY_ASSETS,
       components: [
         inst("navbar", { x: 0, y: 0, w: 12, h: 1 }, { logoText: "alex.dev", ctaLabel: "Hire me" }),
@@ -183,6 +188,7 @@ export const TEMPLATES: TemplateDef[] = [
       projectName,
       cols: 12,
       rowHeight: 48,
+      settings: { ...DEFAULT_SETTINGS, pageTitle: projectName },
       assets: LIBRARY_ASSETS,
       components: [
         inst("navbar", { x: 0, y: 0, w: 12, h: 1 }, { logoText: "Nova", variant: "dark", background: "#0f172a", textColor: "#f8fafc" }),
@@ -213,6 +219,7 @@ export const TEMPLATES: TemplateDef[] = [
       projectName,
       cols: 12,
       rowHeight: 48,
+      settings: { ...DEFAULT_SETTINGS, pageTitle: projectName },
       assets: LIBRARY_ASSETS,
       components: [
         inst("navbar", { x: 0, y: 0, w: 12, h: 1 }, { logoText: "Docs", ctaLabel: "GitHub" }),
@@ -239,6 +246,7 @@ export const TEMPLATES: TemplateDef[] = [
       projectName,
       cols: 12,
       rowHeight: 48,
+      settings: { ...DEFAULT_SETTINGS, pageTitle: projectName },
       assets: LIBRARY_ASSETS,
       components: [],
     }),

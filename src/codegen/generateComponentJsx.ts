@@ -16,6 +16,50 @@ function esc(v: unknown): string {
   return String(v ?? "").replace(/`/g, "\`").replace(/\$\{/g, "\${");
 }
 
+/** Compiles a ComponentAction into a real onClick handler (href navigation,
+ *  smooth scroll to another widget, alert, or the user's custom JS). */
+function actionHandler(action: unknown): string {
+  const a = (action ?? { type: "none" }) as any;
+  switch (a.type) {
+    case "link": {
+      const url = String(a.url ?? "").replace(/"/g, '\"');
+      return a.target === "_blank"
+        ? `onClick={() => window.open("${url}", "_blank")}`
+        : `onClick={() => { window.location.href = "${url}"; }}`;
+    }
+    case "scroll":
+      return `onClick={() => document.getElementById("comp-${esc(a.componentId ?? "")}")?.scrollIntoView({ behavior: "smooth" })}`;
+    case "alert":
+      return `onClick={() => alert(${JSON.stringify(a.message ?? "")})}`;
+    case "custom":
+      return `onClick={() => {\n          ${String(a.code ?? "")}\n        }}`;
+    default:
+      return "";
+  }
+}
+
+/** "Label::url" list -> JS array literal of { label, url } pairs. */
+function linkItemsExpr(items: unknown): string {
+  const list = (Array.isArray(items) ? (items as string[]) : []).map((item) => {
+    const [label, ...rest] = String(item).split("::");
+    return { label: (label ?? "").trim(), url: rest.join("::").trim() };
+  });
+  return JSON.stringify(list);
+}
+
+/** "Title::link1|url1, link2|url2" footer columns -> JS array literal. */
+function footerColumnsExpr(items: unknown): string {
+  const cols = (Array.isArray(items) ? (items as string[]) : []).map((line) => {
+    const [title, linksPart] = String(line).split("::");
+    const links = (linksPart ?? "").split(",").filter(Boolean).map((l) => {
+      const [label, ...rest] = l.split("|");
+      return { label: (label ?? "").trim(), url: rest.join("|").trim() };
+    });
+    return { title: (title ?? "").trim(), links };
+  });
+  return JSON.stringify(cols);
+}
+
 const shadowExpr = (v: unknown) =>
   v === "none" ? "none" : v === "sm" ? "0 1px 2px rgba(0,0,0,.06)" : v === "lg" ? "0 10px 25px rgba(0,0,0,.12)" : v === "xl" ? "0 20px 40px rgba(0,0,0,.16)" : "0 4px 10px rgba(0,0,0,.08)";
 
@@ -121,7 +165,7 @@ export function generateComponentJsx(spec: ComponentSpec): string {
 
     case "navbar":
       return `function ${varName}() {
-  const links = ${JSON.stringify(p.links)};
+  const links = ${linkItemsExpr(p.links)};
   const dark = ${JSON.stringify(p.variant)} === "dark";
   return (
     <header className="${cls(spec, "flex items-center justify-between px-6 h-full")}" style={{
@@ -132,18 +176,20 @@ export function generateComponentJsx(spec: ComponentSpec): string {
       fontFamily: "${esc(p.textFont)}",
       position: ${p.sticky} ? "sticky" : "static", top: 0, zIndex: 30,
     }}>
-      <span className="font-bold" style={{ color: dark ? "${p.textColor}" : "#111827" }}>${esc(p.logoText)}</span>
+      <a href="#" className="font-bold" style={{ color: dark ? "${p.textColor}" : "#111827" }}>${esc(p.logoText)}</a>
       <nav className="flex gap-6">
-        {links.map((link, i) => <a key={i} href="#" style={{ color: "${p.textColor}" }}>{link}</a>)}
+        {links.map((link, i) => link.url
+          ? <a key={i} href={link.url} style={{ color: "${p.textColor}" }}>{link.label}</a>
+          : <span key={i} style={{ color: "${p.textColor}" }}>{link.label}</span>)}
       </nav>
-      ${p.ctaLabel ? `<a href="#" style={{ background: "${p.ctaBackground}", color: "${p.ctaTextColor}", padding: "8px 16px", borderRadius: 8 }}>${esc(p.ctaLabel)}</a>` : ""}
+      ${p.ctaLabel ? `<a href="#" ${actionHandler(p.ctaAction)} style={{ background: "${p.ctaBackground}", color: "${p.ctaTextColor}", padding: "8px 16px", borderRadius: 8 }}>${esc(p.ctaLabel)}</a>` : ""}
     </header>
   );
 }`;
 
     case "footer":
       return `function ${varName}() {
-  const columns = ${JSON.stringify((p.columns ?? []).map((l: string) => { const [t, ls] = l.split("::"); return { title: t?.trim() ?? "", links: (ls ?? "").split(",").map((x) => x.trim()).filter(Boolean) }; }))};
+  const columns = ${footerColumnsExpr(p.columns)};
   return (
     <footer className="${cls(spec, "w-full h-full px-8 py-6")}" style={{ background: "${p.background}", fontFamily: "${esc(p.textFont)}", borderTop: "1px solid ${p.borderColor}" }}>
       <div className="flex gap-10 h-full">
@@ -160,7 +206,9 @@ export function generateComponentJsx(spec: ComponentSpec): string {
           {columns.map((col, i) => (
             <div key={i}>
               <div style={{ color: "${p.accentColor}", fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>{col.title}</div>
-              {col.links.map((link, j) => <div key={j} style={{ color: "${p.mutedColor}", fontSize: 12, marginTop: 6 }}>{link}</div>)}
+              {col.links.map((link, j) => link.url
+                ? <a key={j} href={link.url} style={{ color: "${p.mutedColor}", fontSize: 12, marginTop: 6, display: "block" }}>{link.label}</a>
+                : <div key={j} style={{ color: "${p.mutedColor}", fontSize: 12, marginTop: 6 }}>{link.label}</div>)}
             </div>
           ))}
         </div>
@@ -186,8 +234,8 @@ export function generateComponentJsx(spec: ComponentSpec): string {
           <h1 style={{ color: "${p.textColor}", fontFamily: "${esc(p.textFont)}", fontSize: 34, fontWeight: 800, lineHeight: 1.15 }}>${esc(p.headline)}</h1>
           <p style={{ color: "${p.mutedColor}", fontFamily: "${esc(p.textFont)}", fontSize: 15, marginTop: 12 }}>${esc(p.subheadline)}</p>
           <div className="flex gap-3 mt-6 flex-wrap">
-            <a href="#" style={{ background: "${p.accentColor}", color: "${p.accentTextColor}", padding: "12px 22px", borderRadius: 10, fontWeight: 600 }}>${esc(p.ctaPrimary)}</a>
-            ${p.ctaSecondary ? `<a href="#" style={{ color: "${p.textColor}", padding: "12px 22px", borderRadius: 10, fontWeight: 600, border: "1.5px solid ${p.textColor}44" }}>${esc(p.ctaSecondary)}</a>` : ""}
+            <a href="#" ${actionHandler(p.primaryAction)} style={{ background: "${p.accentColor}", color: "${p.accentTextColor}", padding: "12px 22px", borderRadius: 10, fontWeight: 600 }}>${esc(p.ctaPrimary)}</a>
+            ${p.ctaSecondary ? `<a href="#" ${actionHandler(p.secondaryAction)} style={{ color: "${p.textColor}", padding: "12px 22px", borderRadius: 10, fontWeight: 600, border: "1.5px solid ${p.textColor}44" }}>${esc(p.ctaSecondary)}</a>` : ""}
           </div>
         </div>
         {${JSON.stringify(p.layout)} !== "center" && ${JSON.stringify(!!p.imageUrl)} && <img src="${esc(p.imageUrl)}" alt="" style={{ width: "40%", height: "85%", objectFit: "cover", borderRadius: 14, boxShadow: "0 20px 40px rgba(0,0,0,.16)" }} />}
@@ -230,9 +278,11 @@ export function generateComponentJsx(spec: ComponentSpec): string {
     }}>
       <span className="font-bold" style={{ color: "${p.textColor}" }}>${esc(p.logoText)}</span>
       <nav className="flex gap-6">
-        {${JSON.stringify(p.links)}.map((link, i) => <a key={i} href="#" style={{ color: "${p.linkColor}" }}>{link}</a>)}
+        {${linkItemsExpr(p.links)}.map((link, i) => link.url
+          ? <a key={i} href={link.url} style={{ color: "${p.linkColor}" }}>{link.label}</a>
+          : <span key={i} style={{ color: "${p.linkColor}" }}>{link.label}</span>)}
       </nav>
-      ${p.ctaLabel ? `<a href="#" style={{ background: "${p.ctaBackground}", color: "${p.ctaTextColor}", padding: "8px 14px", borderRadius: 8, fontSize: 13 }}>${esc(p.ctaLabel)}</a>` : ""}
+      ${p.ctaLabel ? `<a href="#" ${actionHandler(p.ctaAction)} style={{ background: "${p.ctaBackground}", color: "${p.ctaTextColor}", padding: "8px 14px", borderRadius: 8, fontSize: 13 }}>${esc(p.ctaLabel)}</a>` : ""}
     </header>
   );
 }`;
@@ -303,14 +353,15 @@ export function generateComponentJsx(spec: ComponentSpec): string {
         <h3 className="font-semibold" style={{ fontSize: ${fontSizePxExpr(p.titleSize)} }}>${esc(p.title)}</h3>
         <p className="mt-1" style={{ fontSize: 13, color: "#6b7280" }}>${esc(p.body)}</p>
       </div>
-      ${p.hoverReveal ? `<div className="absolute inset-0 flex items-center justify-center"
+      ${p.hoverReveal ? `<button ${actionHandler(p.action)} className="absolute inset-0 flex items-center justify-center"
         style={{
           background: "${p.revealBackground}",
           color: "${p.revealTextColor}",
           opacity: hovered ? 1 : 0,
           transition: \`opacity ${p.durationMs}ms ${p.easing}\`,
           pointerEvents: hovered ? "auto" : "none",
-        }}>${esc(p.revealContent)}</div>` : ""}
+          border: "none", cursor: "pointer",
+        }}>${esc(p.revealContent)}</button>` : ""}
     </div>
   );
 }`;
@@ -372,15 +423,30 @@ export function generateComponentJsx(spec: ComponentSpec): string {
 
     case "searchBar":
       return `function ${varName}() {
+  const suggestions = ${JSON.stringify(p.suggestions ?? [])};
+  const [query, setQuery] = React.useState("");
+  const [focused, setFocused] = React.useState(false);
+  const filtered = query.trim() === "" ? suggestions : suggestions.filter((x) => x.toLowerCase().includes(query.trim().toLowerCase()));
   return (
-    <div className="${cls(spec, "flex items-center w-full")}" style={{
-      background: "${p.background}", borderRadius: ${p.rounded}, padding: "8px 16px",
-      border: "1px solid ${p.borderColor}",
-      transition: \`box-shadow ${p.durationMs}ms ${p.easing}\`,
-      fontFamily: "${esc(p.textFont)}",
-    }}>
-      ${p.showIcon ? `<svg className="mr-2 opacity-60" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg>` : ""}
-      <input placeholder="${esc(p.placeholder)}" style={{ color: "${p.textColor}", background: "transparent", outline: "none", width: "100%", fontSize: ${fontSizePxExpr(p.size)} }} />
+    <div className="${cls(spec, "relative w-full")}" onBlur={() => setTimeout(() => setFocused(false), 150)}>
+      <div className="flex items-center" style={{
+        background: "${p.background}", borderRadius: ${p.rounded}, padding: "8px 16px",
+        border: "1px solid ${p.borderColor}",
+        transition: \`box-shadow ${p.durationMs}ms ${p.easing}\`,
+        fontFamily: "${esc(p.textFont)}",
+      }}>
+        ${p.showIcon ? `<svg className="mr-2 opacity-60 flex-shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg>` : ""}
+        <input value={query} onChange={(e) => setQuery(e.target.value)} onFocus={() => setFocused(true)}
+          placeholder="${esc(p.placeholder)}" style={{ color: "${p.textColor}", background: "transparent", outline: "none", width: "100%", fontSize: ${fontSizePxExpr(p.size)} }} />
+      </div>
+      ${p.showSuggestions ? `{focused && filtered.length > 0 && (
+        <div className="absolute left-0 right-0 top-full mt-1 rounded-lg bg-white border border-gray-200 shadow-xl overflow-hidden z-40">
+          {filtered.map((x, i) => (
+            <div key={i} onMouseDown={(e) => { e.preventDefault(); setQuery(x); setFocused(false); }}
+              style={{ padding: "7px 14px", fontSize: 13, cursor: "pointer" }} className="hover:bg-indigo-50">{x}</div>
+          ))}
+        </div>
+      )}` : ""}
     </div>
   );
 }`;
@@ -389,16 +455,30 @@ export function generateComponentJsx(spec: ComponentSpec): string {
       return `function ${varName}() {
   const columns = ${JSON.stringify(p.columns)};
   const rows = ${JSON.stringify(p.rows)};
+  const [sort, setSort] = React.useState(null);
+  const sorted = sort
+    ? [...rows].sort((a, b) => {
+        const av = a[sort.index] ?? ""; const bv = b[sort.index] ?? "";
+        const an = Number(av); const bn = Number(bv);
+        const cmp = !isNaN(an) && !isNaN(bn) && av !== "" && bv !== "" ? an - bn : String(av).localeCompare(String(bv));
+        return cmp * sort.dir;
+      })
+    : rows;
   return (
     <div className="${cls(spec, "w-full h-full overflow-auto")}">
       <table className="w-full border-collapse" style={{ fontSize: ${fontSizePxExpr(p.fontSize)}, fontFamily: "${esc(p.textFont)}" }}>
         <thead>
           <tr style={{ background: "${p.headerBackground}", color: "${p.headerTextColor}" }}>
-            {columns.map((c, i) => <th key={i} style={{ textAlign: ${textAlignExpr(p.headerAlign)}, padding: ${p.cellPadding} }}>{c}</th>)}
+            {columns.map((c, i) => (
+              <th key={i} style={{ textAlign: ${textAlignExpr(p.headerAlign)}, padding: ${p.cellPadding}, cursor: ${p.sortable} ? "pointer" : "default" }}
+                onClick={() => ${p.sortable} && setSort((cur) => cur?.index === i ? { index: i, dir: -cur.dir } : { index: i, dir: 1 })}>
+                {c}{${p.sortable} && sort?.index === i && (sort.dir === 1 ? " ▲" : " ▼")}
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, ri) => (
+          {sorted.map((row, ri) => (
             <tr key={ri} style={{ background: ${p.striped} && ri % 2 === 1 ? "#f9fafb" : "transparent" }}
               className="border-b" >
               {row.map((cell, ci) => <td key={ci} style={{ padding: ${p.cellPadding}, borderColor: "${p.borderColor}" }}>{cell}</td>)}
@@ -418,6 +498,7 @@ export function generateComponentJsx(spec: ComponentSpec): string {
   return (
     <div className="${cls(spec, "w-full h-full flex items-center justify-center")}">
       <button
+        ${actionHandler(p.action)}
         onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
         style={{
           width: ${p.fullWidth} ? "100%" : "auto",
@@ -446,20 +527,26 @@ export function generateComponentJsx(spec: ComponentSpec): string {
     case "modal":
       return `function ${varName}() {
   const [open, setOpen] = React.useState(false);
+  React.useEffect(() => { if (open) document.body.style.overflow = "hidden"; else document.body.style.overflow = ""; }, [open]);
   return (
     <>
-      <button onClick={() => setOpen(true)} className="px-4 py-2 rounded-lg bg-indigo-600 text-white">Open modal</button>
+      <button onClick={() => setOpen(true)} className="px-4 py-2 rounded-lg bg-indigo-600 text-white">${esc(p.triggerLabel ?? "Open modal")}</button>
       {open && (
-        <div className="fixed inset-0 flex items-center justify-center z-50" style={{ background: "${p.overlayColor}", backdropFilter: "blur(${p.backdropBlur}px)" }}
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-6" style={{ background: "${p.overlayColor}", backdropFilter: "blur(${p.backdropBlur}px)" }}
           onClick={() => ${p.closeOnOverlayClick} && setOpen(false)}>
-          <div onClick={(e) => e.stopPropagation()} className="${cls(spec, "p-6 w-full max-w-md")}" style={{
+          <div onClick={(e) => e.stopPropagation()} className="${cls(spec, "relative p-6 w-full max-w-md shadow-2xl")}" style={{
             background: "${p.panelBackground}", borderRadius: ${p.borderRadius},
-            transition: \`all ${p.durationMs}ms ${p.easing}\`,
+            animation: \`${varName}-in ${p.durationMs}ms ${p.easing} both\`,
             fontFamily: "${esc(p.textFont)}",
           }}>
-            ${p.showCloseButton ? `<div className="flex justify-end"><button onClick={() => setOpen(false)}>✕</button></div>` : ""}
+            <style>{\`@keyframes ${varName}-in { from { opacity: 0; ${p.entrance === "slide-up" ? "transform: translateY(24px);" : p.entrance === "fade" ? "" : "transform: scale(.94);"} } to { opacity: 1; transform: none; } }\`}</style>
+            ${p.showCloseButton ? `<button onClick={() => setOpen(false)} style={{ position: "absolute", top: 12, right: 12, background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "#94a3b8" }}>✕</button>` : ""}
             <h3 className="text-lg font-semibold mb-2">${esc(p.title)}</h3>
             <p className="text-sm text-gray-500">${esc(p.body)}</p>
+            <div className="flex justify-end gap-2 mt-5">
+              <button onClick={() => setOpen(false)} style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #e2e8f0", background: "none", cursor: "pointer", fontSize: 13 }}>Close</button>
+              <button onClick={() => setOpen(false)} style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: "#4f46e5", color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Confirm</button>
+            </div>
           </div>
         </div>
       )}
@@ -761,7 +848,7 @@ export function generateComponentJsx(spec: ComponentSpec): string {
           </div>
         ))}
       </div>
-      <a href="#" style={{ marginTop: 16, display: "block", textAlign: "center", padding: "10px 16px", borderRadius: 10, fontWeight: 600, fontSize: 13, background: ${p.highlighted} ? "${p.accentColor}" : "${p.accentColor}1a", color: ${p.highlighted} ? "#fff" : "${p.accentColor}" }}>
+      <a href="#" ${actionHandler(p.ctaAction)} style={{ marginTop: 16, display: "block", textAlign: "center", padding: "10px 16px", borderRadius: 10, fontWeight: 600, fontSize: 13, background: ${p.highlighted} ? "${p.accentColor}" : "${p.accentColor}1a", color: ${p.highlighted} ? "#fff" : "${p.accentColor}" }}>
         ${esc(p.ctaLabel)}
       </a>
     </div>
@@ -847,6 +934,7 @@ export function generateComponentJsx(spec: ComponentSpec): string {
     case "newsletter":
       return `function ${varName}() {
   const inline = ${JSON.stringify(p.layout)} === "inline";
+  const [submitted, setSubmitted] = React.useState(false);
   return (
     <div className="${cls(spec, "w-full h-full flex items-center justify-center p-6")}" style={{ background: "${p.background}", borderRadius: ${p.borderRadius}, fontFamily: "${esc(p.textFont)}" }}>
       <div style={{ width: "100%", display: inline ? "flex" : "block", gap: 12, alignItems: "center", flexWrap: "wrap", justifyContent: "center" }}>
@@ -854,12 +942,18 @@ export function generateComponentJsx(spec: ComponentSpec): string {
           <div style={{ fontWeight: 700, fontSize: 15, color: "${p.textColor}" }}>${esc(p.headline)}</div>
           <div style={{ fontSize: 12, color: "${p.mutedColor}", marginTop: 2 }}>${esc(p.subheadline)}</div>
         </div>
-        <form onSubmit={(e) => e.preventDefault()} style={{ display: "flex", gap: 8, flex: inline ? 1 : "none", minWidth: 220, marginTop: inline ? 0 : 12, flexDirection: inline ? "row" : "column" }}>
-          <input type="email" placeholder="${esc(p.placeholder)}" style={{ flex: 1, padding: "10px 14px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#fff", fontSize: 13 }} />
-          <button style={{ padding: "10px 18px", borderRadius: 10, background: "${p.accentColor}", color: "${p.accentTextColor}", border: "none", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+        {submitted ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 18px", borderRadius: 10, background: "${p.accentColor}1f", color: "${p.accentColor}", fontWeight: 600, fontSize: 13, flex: inline ? 1 : "none", marginTop: inline ? 0 : 12, justifyContent: "center" }}>
+            ✓ ${esc(p.successMessage ?? "Thanks for subscribing!")}
+          </div>
+        ) : (
+        <form onSubmit={(e) => { e.preventDefault(); setSubmitted(true); }} style={{ display: "flex", gap: 8, flex: inline ? 1 : "none", minWidth: 220, marginTop: inline ? 0 : 12, flexDirection: inline ? "row" : "column" }}>
+          <input type="email" required placeholder="${esc(p.placeholder)}" style={{ flex: 1, padding: "10px 14px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#fff", fontSize: 13 }} />
+          <button style={{ padding: "10px 18px", borderRadius: 10, background: "${p.accentColor}", color: "${p.accentTextColor}", border: "none", fontWeight: 600, fontSize: 13, cursor: "pointer" }} ${actionHandler(p.action)}>
             ${esc(p.buttonLabel)}
           </button>
         </form>
+        )}
       </div>
     </div>
   );
@@ -867,14 +961,14 @@ export function generateComponentJsx(spec: ComponentSpec): string {
 
     case "breadcrumb":
       return `function ${varName}() {
-  const items = ${JSON.stringify(p.items)};
+  const items = ${linkItemsExpr(p.items)};
   return (
     <nav className="${cls(spec, "w-full h-full flex items-center gap-2 overflow-auto")}" aria-label="Breadcrumb" style={{ fontFamily: "${esc(p.textFont)}" }}>
       {items.map((item, i) => (
         <span key={i} className="flex items-center gap-2 whitespace-nowrap">
-          <a href="#" style={{ color: i === items.length - 1 ? "${p.currentColor}" : "${p.textColor}", fontWeight: i === items.length - 1 ? 600 : 400, fontSize: 13 }}>
-            {item}
-          </a>
+          {i < items.length - 1 && item.url
+            ? <a href={item.url} style={{ color: "${p.textColor}", fontSize: 13 }}>{item.label}</a>
+            : <span style={{ color: i === items.length - 1 ? "${p.currentColor}" : "${p.textColor}", fontWeight: i === items.length - 1 ? 600 : 400, fontSize: 13 }}>{item.label}</span>}
           {i < items.length - 1 && <span style={{ color: "${p.textColor}", opacity: 0.5, fontSize: 12 }}>${esc(p.separator)}</span>}
         </span>
       ))}

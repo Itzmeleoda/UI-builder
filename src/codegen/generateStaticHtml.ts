@@ -7,6 +7,15 @@ import { sanitizeHtml } from "../utils/sanitize";
 // node carries data-ui-type / data-ui-id / data-ui-box so a re-import can
 // recover structure even in heuristic (non-spec) mode.
 
+function staticAction(action: unknown): { href: string; onClick: string } {
+  const a = (action ?? { type: "none" }) as any;
+  if (a.type === "link" && a.url) return { href: a.url, onClick: a.target === "_blank" ? `window.open('${String(a.url).replace(/'/g, "\\'")}','_blank');return false;` : "" };
+  if (a.type === "scroll" && a.componentId) return { href: `#comp-${a.componentId}`, onClick: "" };
+  if (a.type === "alert") return { href: "#", onClick: `alert('${String(a.message ?? "").replace(/'/g, "\\'")}');return false;` };
+  if (a.type === "custom") return { href: "#", onClick: String(a.code ?? "").replace(/"/g, "&quot;") };
+  return { href: "", onClick: "" };
+}
+
 function box(spec: ComponentSpec) {
   return `grid-column:${spec.box.x + 1}/span ${spec.box.w};grid-row:${spec.box.y + 1}/span ${spec.box.h};`;
 }
@@ -17,7 +26,7 @@ function wrap(spec: ComponentSpec, inner: string, extraStyle = "") {
     spec.customCode && spec.type !== "rawBlock"
       ? `<div class="ui-custom-code">${sanitizeHtml(spec.customCode).safe}</div>`
       : "";
-  return `<div data-ui-type="${spec.type}" data-ui-id="${spec.id}" data-ui-box='${JSON.stringify(spec.box)}' class="ui-block${cls}" style="${box(spec)}${extraStyle}">${inner}${custom}</div>`;
+  return `<div id="comp-${spec.id}" data-ui-type="${spec.type}" data-ui-id="${spec.id}" data-ui-box='${JSON.stringify(spec.box)}' class="ui-block${cls}" style="${box(spec)}${extraStyle}">${inner}${custom}</div>`;
 }
 
 export function componentToHtml(spec: ComponentSpec): string {
@@ -73,8 +82,11 @@ export function componentToHtml(spec: ComponentSpec): string {
           <tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table>`
       );
     }
-    case "button":
-      return wrap(spec, `<button style="background:${p.background};color:${p.textColor};border-radius:${p.borderRadius}px;padding:${p.paddingY}px ${p.paddingX}px;border:none;">${p.label}</button>`);
+    case "button": {
+      const act = staticAction(p.action);
+      const inner = `<button style="background:${p.background};color:${p.textColor};border-radius:${p.borderRadius}px;padding:${p.paddingY}px ${p.paddingX}px;border:none;cursor:pointer;"${act.href ? ` data-href="${act.href}"` : ""}${act.onClick ? ` onclick="${act.onClick}"` : ""}>${p.label}</button>`;
+      return wrap(spec, inner);
+    }
     case "modal":
       return wrap(
         spec,
@@ -109,8 +121,8 @@ export function componentToHtml(spec: ComponentSpec): string {
         spec,
         `<nav class="navbar" style="display:flex;justify-content:space-between;align-items:center;padding:0 24px;background:${p.background};color:${p.textColor};box-shadow:${p.shadow === "none" ? "none" : "0 1px 2px rgba(0,0,0,.06)"};">
           <span><strong>${p.logoText}</strong></span>
-          <div style="display:flex;gap:24px;">${(p.links as string[]).map((l) => `<a href="#">${l}</a>`).join("")}</div>
-          ${p.ctaLabel ? `<span style="background:${p.ctaBackground};color:${p.ctaTextColor};padding:8px 16px;border-radius:8px;">${p.ctaLabel}</span>` : ""}
+          <div style="display:flex;gap:24px;">${(p.links as string[]).map((l) => { const [label, url] = l.split("::"); return url ? `<a href="${url.trim()}">${label.trim()}</a>` : `<span>${label.trim()}</span>`; }).join("")}</div>
+          ${p.ctaLabel ? `<a href="${staticAction(p.ctaAction).href || "#"}" style="background:${p.ctaBackground};color:${p.ctaTextColor};padding:8px 16px;border-radius:8px;">${p.ctaLabel}</a>` : ""}
         </nav>`
       );
     case "footer":
@@ -126,7 +138,7 @@ export function componentToHtml(spec: ComponentSpec): string {
         spec,
         `<section class="hero" style="display:flex;align-items:center;justify-content:${p.layout === "center" ? "center" : "space-between"};padding:32px;background:${p.background};border-radius:${p.borderRadius}px;gap:24px;overflow:hidden;position:relative;">
           <div style="text-align:${p.align};max-width:560px;"><h1 style="color:${p.textColor};margin:0;">${p.headline}</h1><p style="color:${p.mutedColor};">${p.subheadline}</p>
-          <a href="#" style="background:${p.accentColor};color:${p.accentTextColor};padding:12px 22px;border-radius:10px;display:inline-block;">${p.ctaPrimary}</a></div>
+          <a href="${staticAction(p.primaryAction).href || "#"}" ${staticAction(p.primaryAction).onClick ? `onclick="${staticAction(p.primaryAction).onClick}"` : ""} style="background:${p.accentColor};color:${p.accentTextColor};padding:12px 22px;border-radius:10px;display:inline-block;">${p.ctaPrimary}</a></div>
           ${p.imageUrl && p.layout !== "center" ? `<img src="${p.imageUrl}" style="width:40%;height:85%;object-fit:cover;border-radius:14px;">` : ""}
         </section>`
       );

@@ -423,6 +423,7 @@ export function Canvas() {
       {/* ── artboard ── */}
       <div
         className="flex-1 overflow-auto p-6 ui-dotted-bg"
+        style={{ ["--canvas-bg" as string]: project.settings.canvasBackground }}
         onDragOver={(e) => e.preventDefault()}
         onClick={(e) => {
           if (e.target === e.currentTarget) select(null);
@@ -451,6 +452,7 @@ export function Canvas() {
               {project.components.map((c) => (
                 <div
                   key={c.id}
+                  id={`comp-${c.id}`}
                   onClick={(e) => {
                     e.stopPropagation();
                     select(c.id);

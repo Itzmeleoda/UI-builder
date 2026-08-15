@@ -3,6 +3,7 @@ import type { AssetRecord, ComponentSpec, ComponentType, ProjectSpec } from "../
 import { SCHEMA_MIN_SUPPORTED_VERSION, SCHEMA_VERSION } from "../types";
 import { COMPONENT_LIBRARY, PALETTE_TYPES } from "../data/componentLibrary";
 import { sanitizeHtml } from "../utils/sanitize";
+import { DEFAULT_SETTINGS, migrateSpec as migrateSpecShared } from "../utils/migrateSpec";
 
 export interface ImportReport {
   mode: "authored-roundtrip" | "heuristic";
@@ -15,14 +16,6 @@ export interface ImportReport {
 export interface ImportResult {
   project: ProjectSpec;
   report: ImportReport;
-}
-
-function migrateSpec(raw: any): ProjectSpec {
-  // Handle at least N-1 schema version. v1 lacked `assets`; backfill.
-  if (raw.schemaVersion === 1) {
-    return { ...raw, schemaVersion: SCHEMA_VERSION, assets: raw.assets ?? [] };
-  }
-  return raw as ProjectSpec;
 }
 
 function extractParams(type: ComponentType, el: Element): Record<string, unknown> {
@@ -241,7 +234,7 @@ export function importHtmlString(html: string, fileName: string): ImportResult {
       if (raw.schemaVersion < SCHEMA_MIN_SUPPORTED_VERSION) {
         throw new Error(`Spec schema v${raw.schemaVersion} is older than the minimum supported v${SCHEMA_MIN_SUPPORTED_VERSION}`);
       }
-      const project = migrateSpec(raw);
+      const project = migrateSpecShared(raw);
       return {
         project,
         report: {
@@ -320,6 +313,7 @@ export function importHtmlString(html: string, fileName: string): ImportResult {
     projectName: fileName.replace(/\.html?$/i, "") || "Imported project",
     cols: 12,
     rowHeight: 60,
+    settings: { ...DEFAULT_SETTINGS, pageTitle: fileName.replace(/\.html?$/i, "") || "Imported project" },
     components,
     assets,
   };

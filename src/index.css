@@ -14,7 +14,7 @@ body {
 
 /* ── design-canvas dotted backdrop ── */
 .ui-dotted-bg {
-  background-color: #f1f5f9;
+  background-color: var(--canvas-bg, #f1f5f9);
   background-image: radial-gradient(circle, rgba(100, 116, 139, 0.22) 1px, transparent 1px);
   background-size: 22px 22px;
 }

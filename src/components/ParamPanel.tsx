@@ -5,7 +5,8 @@ import type { ParamField } from "../types";
 import { AssetPickerInline } from "./AssetPickerInline";
 import { PICKER_ICONS } from "../data/iconMap";
 import { cn } from "../utils/cn";
-import { Info, Copy, Trash2, ChevronDown, AlignLeft, AlignCenter, AlignRight } from "lucide-react";
+import type { ComponentAction } from "../types";
+import { Info, Copy, Trash2, ChevronDown, AlignLeft, AlignCenter, AlignRight, Link2, Bell, Code2, Ban, ArrowDownToLine } from "lucide-react";
 
 const GROUP_LABEL: Record<string, string> = {
   content: "Content",
@@ -93,6 +94,79 @@ function TableEditor({ columns, rows, onColumns, onRows }: { columns: string[]; 
 }
 
 const INPUT_CLS = "w-full text-xs rounded-md border border-slate-200 px-2 py-1.5 focus:border-indigo-300 outline-none";
+
+const ACTION_TYPES = [
+  { value: "none", label: "No action", Icon: Ban },
+  { value: "link", label: "Link", Icon: Link2 },
+  { value: "scroll", label: "Scroll to section", Icon: ArrowDownToLine },
+  { value: "alert", label: "Alert", Icon: Bell },
+  { value: "custom", label: "Custom JS", Icon: Code2 },
+] as const;
+
+function ActionEditor({ value, onChange }: { value: unknown; onChange: (v: ComponentAction) => void }) {
+  const components = useStore((s) => s.project.components);
+  const a = (value ?? { type: "none" }) as ComponentAction;
+  const set = (patch: Partial<ComponentAction>) => {
+    const base: ComponentAction = { type: "none", url: "", target: "_self", componentId: "", message: "", code: "" };
+    onChange({ ...base, ...a, ...patch });
+  };
+  return (
+    <div className="rounded-lg border border-slate-200 overflow-hidden">
+      <div className="grid grid-cols-5 bg-slate-50">
+        {ACTION_TYPES.map(({ value: v, label, Icon }) => (
+          <button
+            key={v}
+            onClick={() => set({ type: v })}
+            title={label}
+            className={cn(
+              "flex flex-col items-center gap-0.5 py-1.5 text-[9px] font-medium transition-colors border-b-2",
+              a.type === v ? "bg-white text-indigo-600 border-indigo-500" : "text-slate-400 border-transparent hover:text-slate-600 hover:bg-white/60"
+            )}
+          >
+            <Icon className="w-3.5 h-3.5" />
+            {label.split(" ")[0]}
+          </button>
+        ))}
+      </div>
+      <div className="p-2 space-y-1.5 bg-white">
+        {a.type === "none" && (
+          <p className="text-[10px] text-slate-400 leading-snug">This element will be a plain button with no handler in the exported app. Pick an action to make it work.</p>
+        )}
+        {a.type === "link" && (
+          <>
+            <input className={INPUT_CLS} placeholder="https://example.com or /page" value={a.url ?? ""} onChange={(e) => set({ url: e.target.value })} />
+            <div className="flex gap-1">
+              {(["_self", "_blank"] as const).map((t) => (
+                <button key={t} onClick={() => set({ target: t })} className={cn("flex-1 text-[10px] py-1 rounded border", a.target === t ? "bg-indigo-600 text-white border-indigo-600" : "border-slate-200 text-slate-500 hover:bg-slate-50")}>
+                  {t === "_self" ? "Same tab" : "New tab"}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+        {a.type === "scroll" && (
+          <select className={INPUT_CLS} value={a.componentId ?? ""} onChange={(e) => set({ componentId: e.target.value })}>
+            <option value="">— pick a target widget —</option>
+            {components.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name} ({c.id.slice(0, 6)})
+              </option>
+            ))}
+          </select>
+        )}
+        {a.type === "alert" && (
+          <input className={INPUT_CLS} placeholder="Alert message…" value={a.message ?? ""} onChange={(e) => set({ message: e.target.value })} />
+        )}
+        {a.type === "custom" && (
+          <>
+            <textarea className={cn(INPUT_CLS, "font-mono")} rows={3} placeholder={"console.log('clicked');\n// runs in the exported app"} value={a.code ?? ""} onChange={(e) => set({ code: e.target.value })} />
+            <p className="text-[10px] text-slate-400">Runs in the preview and in the exported app. Review before shipping.</p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function FieldInput({ field, value, onChange }: { field: ParamField; value: unknown; onChange: (v: unknown) => void }) {
   switch (field.type) {
@@ -242,6 +316,8 @@ function FieldInput({ field, value, onChange }: { field: ParamField; value: unkn
           ))}
         </select>
       );
+    case "action":
+      return <ActionEditor value={value} onChange={(v) => onChange(v)} />;
     case "select":
     case "easing":
     case "trigger":

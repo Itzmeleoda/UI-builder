@@ -1,8 +1,9 @@
 import { create } from "zustand";
 import { v4 as uuid } from "uuid";
-import type { AlignKind, AssetRecord, ComponentSpec, ComponentType, GridBox, ProjectSpec, ToastItem } from "../types";
+import type { AlignKind, AppSettings, AssetRecord, ComponentSpec, ComponentType, GridBox, ProjectSpec, ToastItem } from "../types";
 import { COMPONENT_LIBRARY } from "../data/componentLibrary";
 import { createDefaultProject } from "../data/defaultProject";
+import { migrateSpec } from "../utils/migrateSpec";
 import type { ImportReport } from "../import/importHtml";
 
 interface HistoryEntry {
@@ -23,6 +24,7 @@ interface StoreState {
   toasts: ToastItem[];
   select: (id: string | null) => void;
   addComponent: (type: ComponentType, box?: Partial<GridBox>, params?: Record<string, unknown>) => void;
+  setSettings: (patch: Partial<AppSettings>) => void;
   updateComponentParams: (id: string, patch: Record<string, unknown>, label?: string) => void;
   updateComponentMeta: (id: string, patch: Partial<Pick<ComponentSpec, "name" | "customClassName" | "customCode">>, label?: string) => void;
   /** live position updates while dragging — no history */
@@ -83,12 +85,35 @@ export const useStore = create<StoreState>((set, get) => ({
 
   addComponent: (type, box, params) => {
     const def = COMPONENT_LIBRARY[type];
+    // Theme-aware defaults: new components inherit the project's primary
+    // color & font family for accent/typography params.
+    const settings = get().project.settings;
+    const themed: Record<string, unknown> = { ...def.defaultParams };
+    const ACCENT_KEYS = new Set(["accentColor", "indicatorColor", "ctaBackground", "dotColor", "activeColor", "onColor", "ringColor", "primaryColor", "color"]);
+    // Buttons (and other solid-accent widgets) use `background` as their brand color.
+    if (type === "button") ACCENT_KEYS.add("background");
+    const shade = (hex: string, amt: number): string => {
+      const n = hex.replace("#", "");
+      const num = parseInt(n.length === 3 ? n.split("").map((c) => c + c).join("") : n, 16);
+      const r = Math.max(0, Math.min(255, ((num >> 16) & 255) + amt));
+      const g = Math.max(0, Math.min(255, ((num >> 8) & 255) + amt));
+      const b = Math.max(0, Math.min(255, (num & 255) + amt));
+      return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
+    };
+    for (const [k, v] of Object.entries(themed)) {
+      if (ACCENT_KEYS.has(k) && v === "#6366f1") themed[k] = settings.primaryColor;
+      if (type === "button" && k === "hoverBackground" && v === "#4f46e5" && themed.background === settings.primaryColor) {
+        themed[k] = shade(settings.primaryColor, -28);
+      }
+      if (typeof v === "string" && (k === "textFont" || k.endsWith("Font")) && v.includes("system-ui")) themed[k] = settings.fontFamily;
+      if (k === "borderRadius" && settings.borderRadius !== 12) themed[k] = settings.borderRadius;
+    }
     const newComp: ComponentSpec = {
       id: uuid(),
       type,
       name: def.label,
       box: { ...def.defaultBox, ...box },
-      params: { ...def.defaultParams, ...params },
+      params: { ...themed, ...params },
       origin: "authored",
     };
     set((s) => ({
@@ -167,14 +192,29 @@ export const useStore = create<StoreState>((set, get) => ({
 
   setProjectName: (name) => set((s) => ({ project: { ...s.project, projectName: name } })),
 
-  replaceProject: (project, report = null, label = "Load project") =>
+  setSettings: (patch) =>
     set((s) => ({
-      history: pushHistory(s.history, s.project, label),
+      history: pushHistory(s.history, s.project, "Update app settings"),
       future: [],
-      project,
-      selectedId: null,
-      lastImportReport: report,
+      project: { ...s.project, settings: { ...s.project.settings, ...patch } },
     })),
+
+  replaceProject: (project, report = null, label = "Load project") =>
+    set((s) => {
+      let migrated = project;
+      try {
+        migrated = migrateSpec(project);
+      } catch {
+        migrated = project;
+      }
+      return {
+        history: pushHistory(s.history, s.project, label),
+        future: [],
+        project: migrated,
+        selectedId: null,
+        lastImportReport: report,
+      };
+    }),
 
   addAsset: (asset) =>
     set((s) => ({

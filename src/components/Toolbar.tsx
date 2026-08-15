@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "../state/store";
-import { Undo2, Redo2, Upload, Download, Braces, RotateCcw, LayoutTemplate, ChevronDown, History as HistoryIcon, Keyboard } from "lucide-react";
+import { Undo2, Redo2, Upload, Braces, RotateCcw, LayoutTemplate, ChevronDown, History as HistoryIcon, Keyboard, Settings2, Rocket } from "lucide-react";
 import { cn } from "../utils/cn";
 
-export type ModalKind = "export" | "import" | "spec" | null;
+export type ModalKind = "export" | "import" | "spec" | "settings" | "finish" | null;
 
 export function Toolbar({ onOpenModal }: { onOpenModal: (m: ModalKind) => void }) {
   const project = useStore((s) => s.project);
@@ -100,9 +100,12 @@ export function Toolbar({ onOpenModal }: { onOpenModal: (m: ModalKind) => void }
 
       <div className="flex-1" />
 
-      <span className="hidden xl:flex items-center gap-1 text-[10px] text-slate-400 mr-1" title="Keyboard shortcuts">
+      <span className="hidden 2xl:flex items-center gap-1 text-[10px] text-slate-400 mr-1" title="Keyboard shortcuts">
         <Keyboard className="w-3 h-3" /> ⌘Z undo · ⌘⇧Z redo · ⌘D duplicate · ⌫ delete · arrows nudge
       </span>
+      <button onClick={() => onOpenModal("settings")} title="Customize the whole app: brand color, fonts, radius, page meta" className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md text-slate-500 hover:bg-slate-100">
+        <Settings2 className="w-3.5 h-3.5" /> Settings
+      </button>
       <button onClick={resetToDefault} title="Reset to the default showcase project" className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md text-slate-500 hover:bg-slate-100">
         <RotateCcw className="w-3.5 h-3.5" /> Reset
       </button>
@@ -112,8 +115,8 @@ export function Toolbar({ onOpenModal }: { onOpenModal: (m: ModalKind) => void }
       <button onClick={() => onOpenModal("import")} className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md border border-slate-200 hover:bg-slate-50">
         <Upload className="w-3.5 h-3.5" /> Import HTML
       </button>
-      <button onClick={() => onOpenModal("export")} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-indigo-600 text-white hover:bg-indigo-700">
-        <Download className="w-3.5 h-3.5" /> Export
+      <button onClick={() => onOpenModal("finish")} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-indigo-600 text-white hover:bg-indigo-700">
+        <Rocket className="w-3.5 h-3.5" /> Finish & export
       </button>
     </header>
   );

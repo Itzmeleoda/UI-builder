@@ -1,19 +1,22 @@
 import type { ProjectSpec } from "../types";
 import { SCHEMA_VERSION } from "../types";
 import { LIBRARY_ASSETS } from "./seedAssets";
+import { DEFAULT_SETTINGS } from "../utils/migrateSpec";
 import { inst } from "./templates";
 
 export function createDefaultProject(): ProjectSpec {
+  const firstCard = inst("card", { x: 0, y: 8, w: 4, h: 6 }, { title: "Wireless Headphones", imageUrl: "/images/product-headphones.jpg", revealContent: "$129 — Shop now →", action: { type: "link", url: "https://example.com/headphones", target: "_blank" } });
   return {
     schemaVersion: SCHEMA_VERSION,
     projectName: "Storefront Landing",
     cols: 12,
     rowHeight: 48,
+    settings: { ...DEFAULT_SETTINGS, pageTitle: "Storefront Landing", pageDescription: "Nimbus Studio — sound that moves you" },
     assets: LIBRARY_ASSETS,
     components: [
-      inst("stickyHeader", { x: 0, y: 0, w: 12, h: 1 }, { logoText: "Nimbus", ctaLabel: "Shop now" }),
-      inst("hero", { x: 0, y: 1, w: 12, h: 7 }, { headline: "Nimbus Studio — sound that moves you", layout: "split", imageUrl: "/images/product-headphones.jpg" }),
-      inst("card", { x: 0, y: 8, w: 4, h: 6 }, { title: "Wireless Headphones", imageUrl: "/images/product-headphones.jpg", revealContent: "$129 — Shop now →" }),
+      inst("stickyHeader", { x: 0, y: 0, w: 12, h: 1 }, { logoText: "Nimbus", ctaLabel: "Shop now", ctaAction: { type: "scroll", componentId: firstCard.id }, links: ["Home", "Products::https://example.com/products", "About::https://example.com/about"] }),
+      inst("hero", { x: 0, y: 1, w: 12, h: 7 }, { headline: "Nimbus Studio — sound that moves you", layout: "split", imageUrl: "/images/product-headphones.jpg", primaryAction: { type: "link", url: "https://example.com/shop", target: "_blank" }, secondaryAction: { type: "alert", message: "Demo coming soon!" } }),
+      firstCard,
       inst("card", { x: 4, y: 8, w: 4, h: 6 }, { title: "Smartwatch S2", imageUrl: "/images/product-watch.jpg", revealContent: "$249 — Shop now →" }),
       inst("card", { x: 8, y: 8, w: 4, h: 6 }, { title: "Aero Sneaker", imageUrl: "/images/product-sneaker.jpg", revealContent: "$89 — Shop now →" }),
       inst("tabs", { x: 0, y: 14, w: 6, h: 5 }, {}),

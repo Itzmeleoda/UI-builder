@@ -3,6 +3,7 @@ import { X, Copy, Download, Upload, Check } from "lucide-react";
 import { useStore } from "../state/store";
 import { saveAs } from "file-saver";
 import type { ProjectSpec } from "../types";
+import { migrateSpec } from "../utils/migrateSpec";
 
 export function SpecModal({ onClose }: { onClose: () => void }) {
   const project = useStore((s) => s.project);
@@ -15,7 +16,7 @@ export function SpecModal({ onClose }: { onClose: () => void }) {
     const text = await file.text();
     try {
       const parsed = JSON.parse(text) as ProjectSpec;
-      replaceProject(parsed);
+      replaceProject(migrateSpec(parsed), null, "Load spec.json");
       onClose();
     } catch {
       alert("Invalid spec.json — could not parse JSON.");

@@ -3,6 +3,8 @@ import { cn } from "../utils/cn";
 import type { ComponentSpec } from "../types";
 import { sanitizeHtml } from "../utils/sanitize";
 import { PICKER_ICONS } from "../data/iconMap";
+import { useAction, parseLinkItems, parsePipeLink, navigatePreview } from "./useAction";
+import { useStore } from "../state/store";
 import {
   Search,
   ChevronDown,
@@ -13,8 +15,6 @@ import {
   ThumbsUp,
   Quote as QuoteIcon,
   X,
-  Play,
-  Pause,
   Check,
   Info,
   CircleAlert,
@@ -98,42 +98,12 @@ function RenderBody({ spec }: { spec: ComponentSpec }) {
       );
 
     case "navbar": {
-      const dark = p.variant === "dark";
-      return (
-        <div
-          className={cn("flex items-center justify-between px-5 h-full", wrapperClass)}
-          style={{
-            background: p.variant === "glass" ? "rgba(255,255,255,.65)" : p.background,
-            backdropFilter: p.variant === "glass" ? "blur(10px)" : undefined,
-            color: p.textColor,
-            boxShadow: shadowFor(p.shadow),
-            fontFamily: p.textFont,
-            position: p.sticky ? "sticky" : undefined,
-            top: 0,
-            zIndex: 30,
-          }}
-        >
-          <span className="font-bold text-base" style={{ color: dark ? p.textColor : "#111827" }}>
-            {p.logoText}
-          </span>
-          <nav className="flex items-center gap-5 text-[13px]" style={{ color: p.textColor }}>
-            {(p.links ?? []).map((l: string, i: number) => (
-              <span key={i} className="cursor-pointer hover:underline" style={{ ["--hover" as string]: p.accentColor }}>
-                {l}
-              </span>
-            ))}
-          </nav>
-          {p.ctaLabel && (
-            <span className="px-3.5 py-1.5 rounded-lg text-[12px] font-medium" style={{ background: p.ctaBackground, color: p.ctaTextColor }}>
-              {p.ctaLabel}
-            </span>
-          )}
-        </div>
-      );
+      return <NavbarRenderer p={p} wrapperClass={wrapperClass} />;
     }
 
     case "footer": {
       const cols = (p.columns ?? []) as string[];
+      const pushToast = useStore((x) => x.pushToast);
       const parsed = cols.map((line) => {
         const [title, links] = line.split("::");
         return { title: title?.trim() ?? "", links: (links ?? "").split(",").map((l) => l.trim()).filter(Boolean) };
@@ -159,9 +129,14 @@ function RenderBody({ spec }: { spec: ComponentSpec }) {
                 <div key={i} className="min-w-[90px]">
                   <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: p.accentColor }}>{col.title}</div>
                   <div className="mt-1.5 space-y-1">
-                    {col.links.map((l, j) => (
-                      <div key={j} className="text-[11px] cursor-pointer hover:underline" style={{ color: p.mutedColor }}>{l}</div>
-                    ))}
+                    {col.links.map((l, j) => {
+                      const pl = parsePipeLink(l);
+                      return (
+                        <div key={j} className="text-[11px] cursor-pointer hover:underline" style={{ color: p.mutedColor }} onClick={(e) => { e.stopPropagation(); navigatePreview(pl.url, pushToast); }}>
+                          {pl.label}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               ))}
@@ -178,14 +153,16 @@ function RenderBody({ spec }: { spec: ComponentSpec }) {
       const centered = p.layout === "center";
       const imageBg = p.layout === "image";
       const textAlign = alignTo(p.align);
+      const runPrimary = useAction(p.primaryAction);
+      const runSecondary = useAction(p.secondaryAction);
       const textBlock = (
         <div className={cn("flex flex-col gap-3", centered && "items-center text-center", textAlign === "right" && "items-end text-right", textAlign === "left" && "items-start text-left")}>
           <h2 className="text-2xl font-extrabold leading-tight" style={{ color: p.textColor, fontFamily: p.textFont }}>{p.headline}</h2>
           <p className="text-[13px] max-w-md" style={{ color: p.mutedColor, fontFamily: p.textFont }}>{p.subheadline}</p>
           <div className="flex gap-2 mt-1 flex-wrap">
-            <span className="px-4 py-2 rounded-lg text-[13px] font-semibold" style={{ background: p.accentColor, color: p.accentTextColor }}>{p.ctaPrimary}</span>
+            <button onClick={(e) => { e.stopPropagation(); runPrimary(); }} className="px-4 py-2 rounded-lg text-[13px] font-semibold cursor-pointer hover:opacity-90 active:scale-[.98] transition-all" style={{ background: p.accentColor, color: p.accentTextColor }}>{p.ctaPrimary}</button>
             {p.ctaSecondary && (
-              <span className="px-4 py-2 rounded-lg text-[13px] font-semibold border" style={{ color: p.textColor, borderColor: p.textColor + "44" }}>{p.ctaSecondary}</span>
+              <button onClick={(e) => { e.stopPropagation(); runSecondary(); }} className="px-4 py-2 rounded-lg text-[13px] font-semibold border cursor-pointer hover:bg-black/5 active:scale-[.98] transition-all" style={{ color: p.textColor, borderColor: p.textColor + "44" }}>{p.ctaSecondary}</button>
             )}
           </div>
         </div>
@@ -233,17 +210,7 @@ function RenderBody({ spec }: { spec: ComponentSpec }) {
     }
 
     case "stickyHeader":
-      return (
-        <div className={cn("flex items-center justify-between px-4 h-full rounded-lg", wrapperClass)} style={{ background: p.background, boxShadow: "0 1px 3px rgba(0,0,0,.08)", fontFamily: p.textFont }}>
-          <span className="font-bold text-sm" style={{ color: p.textColor }}>{p.logoText}</span>
-          <nav className="flex gap-4 text-xs">
-            {(p.links ?? []).map((l: string, i: number) => (
-              <span key={i} className="cursor-pointer" style={{ color: p.linkColor }}>{l}</span>
-            ))}
-          </nav>
-          {p.ctaLabel && <span className="text-xs px-3 py-1 rounded-md" style={{ background: p.ctaBackground, color: p.ctaTextColor }}>{p.ctaLabel}</span>}
-        </div>
-      );
+      return <StickyHeaderRenderer p={p} wrapperClass={wrapperClass} />;
 
     case "pageTransition":
       return (
@@ -263,69 +230,18 @@ function RenderBody({ spec }: { spec: ComponentSpec }) {
       return <CarouselRenderer p={p} wrapperClass={wrapperClass} />;
     }
 
-    case "searchBar": {
-      const padY = { sm: 5, md: 8, lg: 12 }[String(p.size)] ?? 8;
-      return (
-        <div
-          className={cn("flex items-center", wrapperClass)}
-          style={{ background: p.background, borderRadius: p.rounded, padding: `${padY}px 12px`, border: `1px solid ${p.borderColor}`, fontFamily: p.textFont }}
-        >
-          {p.showIcon && <Search size={fs(p.size)} className="mr-2 opacity-50" style={{ color: p.textColor }} />}
-          <input readOnly placeholder={p.placeholder} className="bg-transparent outline-none w-full" style={{ color: p.textColor, fontSize: fs(p.size) }} />
-        </div>
-      );
-    }
+    case "searchBar":
+      return <SearchRenderer p={p} wrapperClass={wrapperClass} />;
 
-    case "table": {
-      const cols: string[] = p.columns ?? [];
-      const rows: string[][] = p.rows ?? [];
-      return (
-        <div className={cn("overflow-auto", wrapperClass)}>
-          <table className="w-full border-collapse" style={{ fontSize: fs(p.fontSize), fontFamily: p.textFont }}>
-            <thead>
-              <tr style={{ background: p.headerBackground, color: p.headerTextColor, position: p.stickyHeader ? "sticky" : undefined, top: 0 }}>
-                {cols.map((c, i) => (
-                  <th key={i} className="font-medium px-2" style={{ padding: `${p.cellPadding}px 8px`, textAlign: alignTo(p.headerAlign) }}>
-                    {c}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, ri) => (
-                <tr key={ri} style={{ background: p.striped && ri % 2 === 1 ? "#f9fafb" : "transparent" }}>
-                  {row.map((cell, ci) => (
-                    <td key={ci} className="border-b" style={{ padding: `${p.cellPadding}px 8px`, borderColor: p.borderColor }}>
-                      {cell}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      );
-    }
+    case "table":
+      return <TableRenderer p={p} wrapperClass={wrapperClass} />;
 
     case "button": {
       return <ButtonRenderer p={p} wrapperClass={wrapperClass} />;
     }
 
     case "modal":
-      return (
-        <div className={cn("flex items-center justify-center h-full rounded-xl", wrapperClass)} style={{ background: "#eef2ff" }}>
-          <div className="p-4 text-center" style={{ background: p.panelBackground, borderRadius: p.borderRadius, boxShadow: "0 10px 25px rgba(0,0,0,.12)", width: p.size === "sm" ? "55%" : p.size === "lg" ? "90%" : "75%", fontFamily: p.textFont }}>
-            {p.showCloseButton && (
-              <div className="flex justify-end">
-                <X size={14} className="text-slate-400" />
-              </div>
-            )}
-            <h3 className="font-semibold text-sm" style={{ color: "#111827" }}>{p.title}</h3>
-            <p className="text-xs text-slate-500 mt-1">{p.body}</p>
-            <p className="text-[10px] text-slate-400 mt-2">(modal preview — opens on “{p.trigger}” in generated app)</p>
-          </div>
-        </div>
-      );
+      return <ModalRenderer p={p} wrapperClass={wrapperClass} />;
 
     case "accordion": {
       return <AccordionRenderer p={p} wrapperClass={wrapperClass} />;
@@ -348,30 +264,7 @@ function RenderBody({ spec }: { spec: ComponentSpec }) {
     }
 
     case "stepper": {
-      const steps: string[] = p.steps ?? [];
-      const current = Number(p.current ?? 0);
-      const horizontal = p.orientation !== "vertical";
-      return (
-        <div className={cn("flex h-full", horizontal ? "items-center" : "flex-col justify-center", wrapperClass)} style={{ fontFamily: p.textFont }}>
-          {steps.map((s, i) => {
-            const done = i < current;
-            const active = i === current;
-            const color = done ? p.doneColor : active ? p.activeColor : p.inactiveColor;
-            return (
-              <div key={i} className={cn("flex items-center", horizontal ? "flex-1" : "flex-col", !horizontal && "flex-1 justify-center")}>
-                {horizontal && i > 0 && <div className="flex-1 mx-1" style={{ height: 2, background: i <= current ? p.doneColor : p.connectorColor }} />}
-                <div className={cn("flex items-center gap-1.5", horizontal ? "" : "flex-row")}>
-                  <span className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-semibold text-white flex-shrink-0" style={{ background: color }}>
-                    {done ? <Check size={12} /> : p.showNumbers ? i + 1 : "•"}
-                  </span>
-                  <span className={cn("text-[11px] font-medium whitespace-nowrap", horizontal && "mt-0")} style={{ color: active || done ? p.textColor : "#9ca3af" }}>{s}</span>
-                </div>
-                {!horizontal && i < steps.length - 1 && <div className="my-1 w-0.5 flex-1 min-h-[10px]" style={{ background: i < current ? p.doneColor : p.connectorColor }} />}
-              </div>
-            );
-          })}
-        </div>
-      );
+      return <StepperRenderer p={p} wrapperClass={wrapperClass} />;
     }
 
     case "segmentedControl": {
@@ -481,6 +374,7 @@ function RenderBody({ spec }: { spec: ComponentSpec }) {
     }
 
     case "pricing": {
+      const runCta = useAction(p.ctaAction);
       return (
         <div
           className={cn("p-4 flex flex-col h-full overflow-auto", wrapperClass)}
@@ -511,9 +405,9 @@ function RenderBody({ spec }: { spec: ComponentSpec }) {
               </div>
             ))}
           </div>
-          <div className="mt-3 text-center py-2 rounded-lg text-[12px] font-semibold" style={{ background: p.highlighted ? p.accentColor : p.accentColor + "1a", color: p.highlighted ? "#fff" : p.accentColor }}>
+          <button onClick={(e) => { e.stopPropagation(); runCta(); }} className="mt-3 text-center py-2 rounded-lg text-[12px] font-semibold cursor-pointer hover:opacity-90 active:scale-[.98] transition-all" style={{ background: p.highlighted ? p.accentColor : p.accentColor + "1a", color: p.highlighted ? "#fff" : p.accentColor }}>
             {p.ctaLabel}
-          </div>
+          </button>
         </div>
       );
     }
@@ -585,37 +479,8 @@ function RenderBody({ spec }: { spec: ComponentSpec }) {
       );
     }
 
-    case "videoPlayer": {
-      const [playing, setPlaying] = useState(Boolean(p.autoplay));
-      const aspect = p.aspect === "4:3" ? 4 / 3 : p.aspect === "1:1" ? 1 : 16 / 9;
-      return (
-        <div className={cn("flex items-center justify-center h-full", wrapperClass)}>
-          <div className="relative w-full max-h-full overflow-hidden" style={{ aspectRatio: String(aspect), borderRadius: p.rounded, boxShadow: shadowFor(p.shadow), background: "#0f172a" }}>
-            {p.posterUrl ? (
-              <img src={p.posterUrl} alt="" className={cn("w-full h-full object-cover", playing && "opacity-40")} />
-            ) : (
-              <div className="w-full h-full bg-slate-800" />
-            )}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <button
-                onClick={() => setPlaying((v) => !v)}
-                className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center shadow-lg hover:scale-105 transition-transform"
-              >
-                {playing ? <Pause size={18} className="ml-0.5" /> : <Play size={18} className="ml-1" />}
-              </button>
-            </div>
-            {p.controls && (
-              <div className="absolute bottom-2 inset-x-3 flex items-center gap-2">
-                <div className="flex-1 h-1 rounded bg-white/30">
-                  <div className="h-full rounded bg-white/90" style={{ width: playing ? "42%" : "18%" }} />
-                </div>
-                <span className="text-[10px] text-white/80 font-mono">1:24</span>
-              </div>
-            )}
-          </div>
-        </div>
-      );
-    }
+    case "videoPlayer":
+      return <VideoRenderer p={p} wrapperClass={wrapperClass} />;
 
     case "codeBlock": {
       const lines = String(p.code ?? "").split("\n");
@@ -646,36 +511,24 @@ function RenderBody({ spec }: { spec: ComponentSpec }) {
       );
     }
 
-    case "newsletter": {
-      const inline = p.layout === "inline";
-      return (
-        <div className={cn("flex items-center justify-center h-full p-5", wrapperClass)} style={{ background: p.background, borderRadius: p.borderRadius, fontFamily: p.textFont }}>
-          <div className={cn("w-full", inline && "flex items-center gap-3 flex-wrap justify-center")}>
-            <div className={cn(inline && "flex-1 min-w-[160px] text-left", !inline && "text-center")}>
-              <div className="font-bold text-[15px]" style={{ color: p.textColor }}>{p.headline}</div>
-              <div className="text-[11px] mt-0.5" style={{ color: p.mutedColor }}>{p.subheadline}</div>
-            </div>
-            <div className={cn("flex gap-2", inline ? "flex-1 min-w-[220px]" : "mt-3 w-full", !inline && "flex-col")}>
-              <input readOnly placeholder={p.placeholder} className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-[12px] outline-none" />
-              <span className={cn("text-[12px] font-semibold text-center py-2 rounded-lg", inline ? "px-4" : "")} style={{ background: p.accentColor, color: p.accentTextColor }}>
-                {p.buttonLabel}
-              </span>
-            </div>
-          </div>
-        </div>
-      );
-    }
+    case "newsletter":
+      return <NewsletterRenderer p={p} wrapperClass={wrapperClass} />;
 
     case "breadcrumb": {
-      const items: string[] = p.items ?? [];
+      const items = parseLinkItems(p.items);
+      const pushToast = useStore((x) => x.pushToast);
       return (
         <div className={cn("flex items-center gap-1.5 h-full overflow-auto", wrapperClass)} style={{ fontFamily: p.textFont }}>
           {items.map((it, i) => {
             const last = i === items.length - 1;
             return (
               <div key={i} className="flex items-center gap-1.5 whitespace-nowrap">
-                <span className="text-[12px] cursor-pointer" style={{ color: last ? p.currentColor : p.textColor, fontWeight: last ? 600 : 400 }}>
-                  {it}
+                <span
+                  className="text-[12px] cursor-pointer hover:underline"
+                  style={{ color: last ? p.currentColor : p.textColor, fontWeight: last ? 600 : 400 }}
+                  onClick={(e) => { e.stopPropagation(); if (!last) navigatePreview(it.url, pushToast); }}
+                >
+                  {it.label}
                 </span>
                 {!last && <span className="text-[11px]" style={{ color: p.textColor, opacity: 0.5 }}>{p.separator}</span>}
               </div>
@@ -866,6 +719,7 @@ function CarouselRenderer({ p, wrapperClass }: { p: any; wrapperClass: string })
 
 function ButtonRenderer({ p, wrapperClass }: { p: any; wrapperClass: string }) {
   const [hovered, setHovered] = useState(false);
+  const runAction = useAction(p.action);
   const sizePad = { sm: [10, 14], md: [p.paddingY, p.paddingX], lg: [p.paddingY + 4, p.paddingX + 8] }[String(p.size)] ?? [p.paddingY, p.paddingX];
   const sizeText = { sm: 11, md: 13, lg: 15 }[String(p.size)] ?? 13;
   const icon = <IconOrFallback name={p.icon} size={sizeText} />;
@@ -880,9 +734,10 @@ function ButtonRenderer({ p, wrapperClass }: { p: any; wrapperClass: string }) {
   return (
     <div className={cn("w-full h-full flex items-center justify-center", wrapperClass)}>
       <button
-        className="font-medium relative overflow-hidden"
+        className="font-medium relative overflow-hidden cursor-pointer"
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
+        onClick={(e) => { e.stopPropagation(); runAction(); }}
         style={{
           width: p.fullWidth ? "100%" : undefined,
           background,
@@ -1023,16 +878,20 @@ function SliderRenderer({ p, wrapperClass }: { p: any; wrapperClass: string }) {
   const [value, setValue] = useState(Number(p.value ?? 0));
   const min = Number(p.min ?? 0);
   const max = Number(p.max ?? 100);
-  const pct = ((value - min) / (max - min || 1)) * 100;
   return (
-    <div className={cn("flex items-center justify-center gap-3 h-full px-3", wrapperClass)}>
+    <div className={cn("flex items-center justify-center gap-3 h-full px-3", wrapperClass)} onClick={(e) => e.stopPropagation()}>
       {p.label && <span className="text-[12px] whitespace-nowrap" style={{ color: p.textColor, fontFamily: p.textFont }}>{p.label}</span>}
-      <div className="flex-1 h-1.5 rounded-full relative" style={{ background: p.trackColor }}>
-        <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${Math.max(0, Math.min(100, pct))}%`, background: p.color }} />
-        <div className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-white border-2 shadow" style={{ left: `calc(${Math.max(0, Math.min(100, pct))}% - 8px)`, borderColor: p.color }} />
-      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={p.step}
+        value={value}
+        onChange={(e) => setValue(Number(e.target.value))}
+        className="flex-1 cursor-pointer"
+        style={{ accentColor: p.color }}
+      />
       {p.showValue && <span className="text-[11px] font-mono w-9 text-right" style={{ color: p.textColor }}>{Math.round(value)}</span>}
-      <input type="range" className="hidden" value={value} min={min} max={max} step={p.step} onChange={(e) => setValue(Number(e.target.value))} />
     </div>
   );
 }
@@ -1107,6 +966,7 @@ function SegmentedRenderer({ p, wrapperClass }: { p: any; wrapperClass: string }
 
 function CardRenderer({ p, wrapperClass }: { p: any; wrapperClass: string }) {
   const [hovered, setHovered] = useState(false);
+  const runAction = useAction(p.action);
   const titleSize = { sm: 13, md: 14, lg: 16 }[String(p.titleSize)] ?? 14;
   return (
     <div
@@ -1129,8 +989,9 @@ function CardRenderer({ p, wrapperClass }: { p: any; wrapperClass: string }) {
         <p className="text-xs text-slate-500 mt-1" style={{ fontFamily: p.textFont }}>{p.body}</p>
       </div>
       {p.hoverReveal && (
-        <div
-          className="absolute inset-0 flex items-center justify-center font-medium"
+        <button
+          onClick={(e) => { e.stopPropagation(); runAction(); }}
+          className="absolute inset-0 flex items-center justify-center font-medium cursor-pointer"
           style={{
             background: p.revealBackground,
             color: p.revealTextColor,
@@ -1138,11 +999,11 @@ function CardRenderer({ p, wrapperClass }: { p: any; wrapperClass: string }) {
             transitionProperty: "opacity",
             transitionDuration: `${p.durationMs}ms`,
             transitionTimingFunction: p.easing,
-            pointerEvents: "none",
+            pointerEvents: hovered ? "auto" : "none",
           }}
         >
           {p.revealContent}
-        </div>
+        </button>
       )}
     </div>
   );
@@ -1247,6 +1108,339 @@ function ProgressRenderer({ p, wrapperClass }: { p: any; wrapperClass: string })
             backgroundSize: p.striped ? "20px 20px" : undefined,
           }}
         />
+      </div>
+    </div>
+  );
+}
+
+function NavbarRenderer({ p, wrapperClass }: { p: any; wrapperClass: string }) {
+  const pushToast = useStore((x) => x.pushToast);
+  const runCta = useAction(p.ctaAction);
+  const links = parseLinkItems(p.links);
+  const dark = p.variant === "dark";
+  return (
+    <div
+      className={cn("flex items-center justify-between px-5 h-full", wrapperClass)}
+      style={{
+        background: p.variant === "glass" ? "rgba(255,255,255,.65)" : p.background,
+        backdropFilter: p.variant === "glass" ? "blur(10px)" : undefined,
+        color: p.textColor,
+        boxShadow: shadowFor(p.shadow),
+        fontFamily: p.textFont,
+        position: p.sticky ? "sticky" : undefined,
+        top: 0,
+        zIndex: 30,
+      }}
+    >
+      <span className="font-bold text-base" style={{ color: dark ? p.textColor : "#111827" }}>
+        {p.logoText}
+      </span>
+      <nav className="flex items-center gap-5 text-[13px]" style={{ color: p.textColor }}>
+        {links.map((l, i) => (
+          <span
+            key={i}
+            className={cn("hover:underline", l.url && "cursor-pointer")}
+            style={{ color: p.textColor }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (l.url) navigatePreview(l.url, pushToast);
+            }}
+          >
+            {l.label}
+          </span>
+        ))}
+      </nav>
+      {p.ctaLabel && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            runCta();
+          }}
+          className="px-3.5 py-1.5 rounded-lg text-[12px] font-medium cursor-pointer hover:opacity-90 active:scale-[.98] transition-all"
+          style={{ background: p.ctaBackground, color: p.ctaTextColor }}
+        >
+          {p.ctaLabel}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function StickyHeaderRenderer({ p, wrapperClass }: { p: any; wrapperClass: string }) {
+  const pushToast = useStore((x) => x.pushToast);
+  const runCta = useAction(p.ctaAction);
+  const links = parseLinkItems(p.links);
+  return (
+    <div className={cn("flex items-center justify-between px-4 h-full rounded-lg", wrapperClass)} style={{ background: p.background, boxShadow: "0 1px 3px rgba(0,0,0,.08)", fontFamily: p.textFont }}>
+      <span className="font-bold text-sm" style={{ color: p.textColor }}>{p.logoText}</span>
+      <nav className="flex gap-4 text-xs">
+        {links.map((l, i) => (
+          <span
+            key={i}
+            className={cn(l.url && "cursor-pointer hover:underline")}
+            style={{ color: p.linkColor }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (l.url) navigatePreview(l.url, pushToast);
+            }}
+          >
+            {l.label}
+          </span>
+        ))}
+      </nav>
+      {p.ctaLabel && (
+        <button onClick={(e) => { e.stopPropagation(); runCta(); }} className="text-xs px-3 py-1 rounded-md cursor-pointer hover:opacity-90 active:scale-[.98] transition-all" style={{ background: p.ctaBackground, color: p.ctaTextColor }}>
+          {p.ctaLabel}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function SearchRenderer({ p, wrapperClass }: { p: any; wrapperClass: string }) {
+  const [query, setQuery] = useState("");
+  const [focused, setFocused] = useState(false);
+  const suggestions: string[] = p.suggestions ?? [];
+  const padY = { sm: 5, md: 8, lg: 12 }[String(p.size)] ?? 8;
+  const filtered = query.trim() === "" ? suggestions : suggestions.filter((x) => x.toLowerCase().includes(query.trim().toLowerCase()));
+  return (
+    <div className={cn("relative", wrapperClass)} onClick={(e) => e.stopPropagation()}>
+      <div
+        className={cn("flex items-center")}
+        style={{ background: p.background, borderRadius: p.rounded, padding: `${padY}px 12px`, border: `1px solid ${p.borderColor}`, fontFamily: p.textFont }}
+      >
+        {p.showIcon && <Search size={fs(p.size)} className="mr-2 opacity-50 flex-shrink-0" style={{ color: p.textColor }} />}
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setTimeout(() => setFocused(false), 150)}
+          placeholder={p.placeholder}
+          className="bg-transparent outline-none w-full"
+          style={{ color: p.textColor, fontSize: fs(p.size) }}
+        />
+      </div>
+      {p.showSuggestions && focused && filtered.length > 0 && (
+        <div className="absolute left-0 right-0 top-full mt-1 rounded-lg border border-slate-200 bg-white shadow-xl z-40 overflow-hidden">
+          {filtered.map((x, i) => (
+            <div
+              key={i}
+              className="px-3 py-1.5 text-[11px] cursor-pointer hover:bg-indigo-50 flex items-center gap-2"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setQuery(x);
+                setFocused(false);
+              }}
+            >
+              <Search size={11} className="text-slate-300" />
+              {x}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TableRenderer({ p, wrapperClass }: { p: any; wrapperClass: string }) {
+  const cols: string[] = p.columns ?? [];
+  const rows: string[][] = p.rows ?? [];
+  const [sort, setSort] = useState<{ index: number; dir: 1 | -1 } | null>(null);
+  const sorted = sort
+    ? [...rows].sort((a, b) => {
+        const av = a[sort.index] ?? "";
+        const bv = b[sort.index] ?? "";
+        const an = Number(av);
+        const bn = Number(bv);
+        const cmp = !isNaN(an) && !isNaN(bn) && av !== "" && bv !== "" ? an - bn : String(av).localeCompare(String(bv));
+        return cmp * sort.dir;
+      })
+    : rows;
+  const toggleSort = (i: number) => {
+    if (!p.sortable) return;
+    setSort((cur) => (cur?.index === i ? { index: i, dir: cur.dir === 1 ? -1 : 1 } : { index: i, dir: 1 }));
+  };
+  return (
+    <div className={cn("overflow-auto", wrapperClass)} onClick={(e) => e.stopPropagation()}>
+      <table className="w-full border-collapse" style={{ fontSize: fs(p.fontSize), fontFamily: p.textFont }}>
+        <thead>
+          <tr style={{ background: p.headerBackground, color: p.headerTextColor, position: p.stickyHeader ? "sticky" : undefined, top: 0 }}>
+            {cols.map((c, i) => (
+              <th key={i} className={cn("font-medium px-2 select-none", p.sortable && "cursor-pointer hover:opacity-80")} style={{ padding: `${p.cellPadding}px 8px`, textAlign: alignTo(p.headerAlign) }} onClick={() => toggleSort(i)}>
+                <span className="inline-flex items-center gap-1">
+                  {c}
+                  {p.sortable && sort?.index === i && <span className="text-[9px]">{sort.dir === 1 ? "▲" : "▼"}</span>}
+                </span>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((row, ri) => (
+            <tr key={ri} style={{ background: p.striped && ri % 2 === 1 ? "#f9fafb" : "transparent" }}>
+              {row.map((cell, ci) => (
+                <td key={ci} className="border-b" style={{ padding: `${p.cellPadding}px 8px`, borderColor: p.borderColor }}>
+                  {cell}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ModalRenderer({ p, wrapperClass }: { p: any; wrapperClass: string }) {
+  const [open, setOpen] = useState(false);
+  const [entered, setEntered] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const t = requestAnimationFrame(() => requestAnimationFrame(() => setEntered(true)));
+    return () => cancelAnimationFrame(t);
+  }, [open]);
+  const hidden = p.entrance === "slide-up" ? "translateY(24px)" : p.entrance === "fade" ? "translateY(0)" : "scale(.94)";
+  const hiddenExtra = p.entrance === "fade" ? "" : hidden;
+  return (
+    <div className={cn("flex items-center justify-center h-full rounded-xl", wrapperClass)} style={{ background: "#eef2ff" }}>
+      <button
+        onClick={(e) => { e.stopPropagation(); setOpen(true); setEntered(false); }}
+        className="px-4 py-2 rounded-lg text-[13px] font-semibold bg-indigo-600 text-white hover:bg-indigo-700 active:scale-[.98] transition-all cursor-pointer"
+      >
+        {p.triggerLabel ?? "Open modal"}
+      </button>
+      {open && (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center p-6"
+          style={{ background: p.overlayColor, backdropFilter: Number(p.backdropBlur) > 0 ? `blur(${p.backdropBlur}px)` : undefined }}
+          onClick={() => p.closeOnOverlayClick && setOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full shadow-2xl"
+            style={{
+              background: p.panelBackground,
+              borderRadius: p.borderRadius,
+              maxWidth: p.size === "sm" ? 360 : p.size === "lg" ? 720 : 480,
+              fontFamily: p.textFont,
+              padding: 24,
+              opacity: entered ? 1 : 0,
+              transform: entered ? "translateY(0) scale(1)" : hiddenExtra,
+              transition: `all ${p.durationMs}ms ${p.easing}`,
+            }}
+          >
+            {p.showCloseButton && (
+              <button onClick={() => setOpen(false)} className="absolute top-3 right-3 p-1 rounded-md hover:bg-black/5 text-slate-400 cursor-pointer">
+                <X size={15} />
+              </button>
+            )}
+            <h3 className="font-semibold text-[15px]" style={{ color: "#111827" }}>{p.title}</h3>
+            <p className="text-[13px] text-slate-500 mt-1.5 leading-relaxed">{p.body}</p>
+            <div className="flex justify-end gap-2 mt-5">
+              <button onClick={() => setOpen(false)} className="px-3.5 py-1.5 rounded-lg text-[12px] font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer">
+                Close
+              </button>
+              <button onClick={() => setOpen(false)} className="px-3.5 py-1.5 rounded-lg text-[12px] font-semibold bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer">
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NewsletterRenderer({ p, wrapperClass }: { p: any; wrapperClass: string }) {
+  const pushToast = useStore((x) => x.pushToast);
+  const [email, setEmail] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const runAction = useAction(p.action);
+  const inline = p.layout === "inline";
+  return (
+    <div className={cn("flex items-center justify-center h-full p-5", wrapperClass)} style={{ background: p.background, borderRadius: p.borderRadius, fontFamily: p.textFont }} onClick={(e) => e.stopPropagation()}>
+      <div className={cn("w-full", inline && "flex items-center gap-3 flex-wrap justify-center")}>
+        <div className={cn(inline && "flex-1 min-w-[160px] text-left", !inline && "text-center")}>
+          <div className="font-bold text-[15px]" style={{ color: p.textColor }}>{p.headline}</div>
+          <div className="text-[11px] mt-0.5" style={{ color: p.mutedColor }}>{p.subheadline}</div>
+        </div>
+        {submitted ? (
+          <div className={cn("flex items-center gap-2 rounded-lg px-4 py-2.5 text-[12px] font-semibold", inline ? "flex-1 min-w-[220px]" : "mt-3 w-full")} style={{ background: p.accentColor + "1f", color: p.accentColor }}>
+            <Check size={14} /> {p.successMessage ?? "Thanks for subscribing!"}
+          </div>
+        ) : (
+          <form
+            className={cn("flex gap-2", inline ? "flex-1 min-w-[220px]" : "mt-3 w-full", !inline && "flex-col")}
+            onSubmit={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+                pushToast("⚠ Enter a valid email address", "undo");
+                return;
+              }
+              setSubmitted(true);
+              runAction();
+            }}
+          >
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder={p.placeholder}
+              className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-[12px] outline-none focus:border-indigo-300 min-w-0"
+            />
+            <button type="submit" className={cn("text-[12px] font-semibold text-center py-2 rounded-lg cursor-pointer hover:opacity-90 active:scale-[.98] transition-all", inline ? "px-4" : "")} style={{ background: p.accentColor, color: p.accentTextColor }}>
+              {p.buttonLabel}
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StepperRenderer({ p, wrapperClass }: { p: any; wrapperClass: string }) {
+  const [current, setCurrent] = useState(Number(p.current ?? 0));
+  const steps: string[] = p.steps ?? [];
+  const horizontal = p.orientation !== "vertical";
+  return (
+    <div className={cn("flex h-full", horizontal ? "items-center" : "flex-col justify-center", wrapperClass)} style={{ fontFamily: p.textFont }}>
+      {steps.map((st, i) => {
+        const done = i < current;
+        const active = i === current;
+        const color = done ? p.doneColor : active ? p.activeColor : p.inactiveColor;
+        return (
+          <div key={i} className={cn("flex items-center", horizontal ? "flex-1" : "flex-col", !horizontal && "flex-1 justify-center")}>
+            {horizontal && i > 0 && <div className="flex-1 mx-1" style={{ height: 2, background: i <= current ? p.doneColor : p.connectorColor }} />}
+            <button
+              onClick={(e) => { e.stopPropagation(); setCurrent(i); }}
+              className={cn("flex items-center gap-1.5 cursor-pointer", horizontal ? "" : "flex-row")}
+            >
+              <span className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-semibold text-white flex-shrink-0" style={{ background: color }}>
+                {done ? <Check size={12} /> : p.showNumbers ? i + 1 : "•"}
+              </span>
+              <span className={cn("text-[11px] font-medium whitespace-nowrap", horizontal && "mt-0")} style={{ color: active || done ? p.textColor : "#9ca3af" }}>{st}</span>
+            </button>
+            {!horizontal && i < steps.length - 1 && <div className="my-1 w-0.5 flex-1 min-h-[10px]" style={{ background: i < current ? p.doneColor : p.connectorColor }} />}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function VideoRenderer({ p, wrapperClass }: { p: any; wrapperClass: string }) {
+  const aspect = p.aspect === "4:3" ? 4 / 3 : p.aspect === "1:1" ? 1 : 16 / 9;
+  return (
+    <div className={cn("flex items-center justify-center h-full", wrapperClass)} onClick={(e) => e.stopPropagation()}>
+      <div className="relative w-full max-h-full overflow-hidden" style={{ aspectRatio: String(aspect), borderRadius: p.rounded, boxShadow: shadowFor(p.shadow), background: "#0f172a" }}>
+        {p.videoUrl ? (
+          <video src={p.videoUrl} poster={p.posterUrl} autoPlay={p.autoplay} controls={p.controls} loop={p.loop} muted={p.muted} className="w-full h-full object-cover" />
+        ) : p.posterUrl ? (
+          <img src={p.posterUrl} alt="" className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-white/50 text-[11px]">Add a video URL or poster</div>
+        )}
       </div>
     </div>
   );
