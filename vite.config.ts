@@ -16,4 +16,10 @@ export default defineConfig({
       "@": path.resolve(__dirname, "src"),
     },
   },
+  server: {
+    host: "0.0.0.0",
+    // The app is proxied through a preview host in the sandbox; accept any
+    // host so the live preview (and `vite preview`) always load.
+    allowedHosts: true,
+  },
 });

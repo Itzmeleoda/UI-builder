@@ -1,1 +1,66 @@
 @import "tailwindcss";
+
+/* ── app-wide typography ── */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── design-canvas dotted backdrop ── */
+.ui-dotted-bg {
+  background-color: #f1f5f9;
+  background-image: radial-gradient(circle, rgba(100, 116, 139, 0.22) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+/* ── toast entrance ── */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ── nicer scrollbars ── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* react-grid-layout polish */
+.react-grid-item.react-grid-placeholder {
+  background: #6366f1 !important;
+  opacity: 0.12;
+  border-radius: 10px;
+  transition-duration: 100ms;
+}
+.react-grid-item > .react-resizable-handle {
+  z-index: 20;
+}
+.react-grid-item > .react-resizable-handle::after {
+  border-right: 2px solid rgba(99, 102, 241, 0.6);
+  border-bottom: 2px solid rgba(99, 102, 241, 0.6);
+  width: 7px;
+  height: 7px;
+}
