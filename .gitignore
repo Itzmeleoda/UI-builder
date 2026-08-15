@@ -3,3 +3,4 @@ dist/
 .arena-tmp/
 *.local
 .DS_Store
+*.tsbuildinfo
