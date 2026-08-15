@@ -5,7 +5,7 @@
 // possible.
 // ─────────────────────────────────────────────────────────────────────────
 
-export const SCHEMA_VERSION = 2; // bumped once (v1 -> v2 kept for back-compat demo)
+export const SCHEMA_VERSION = 4; // v4: global app settings + component actions (linking)
 export const SCHEMA_MIN_SUPPORTED_VERSION = 1;
 
 export type Easing =
@@ -20,10 +20,45 @@ export type Trigger = "hover" | "click" | "scroll" | "load";
 
 export type AssetOrigin = "library" | "imported";
 
+export type AssetKind = "image" | "icon" | "font" | "gradient" | "logo";
+
+// ─────────────────────────────────────────────────────────────────────────
+// Actions: the wiring contract for interactive elements. Every button/CTA
+// can carry an action; the preview executes it live and the codegen engine
+// compiles it into real hrefs / onClick handlers in the exported app.
+// ─────────────────────────────────────────────────────────────────────────
+export type ActionType = "none" | "link" | "scroll" | "alert" | "custom";
+
+export interface ComponentAction {
+  type: ActionType;
+  /** for `link` */
+  url?: string;
+  target?: "_self" | "_blank";
+  /** for `scroll` — component id or "#top" */
+  componentId?: string;
+  /** for `alert` */
+  message?: string;
+  /** for `custom` — JS executed on click */
+  code?: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Global app settings — project-level customization applied to the canvas,
+// to new components' defaults, and to the exported application.
+// ─────────────────────────────────────────────────────────────────────────
+export interface AppSettings {
+  primaryColor: string;
+  fontFamily: string;
+  borderRadius: number;
+  canvasBackground: string;
+  pageTitle: string;
+  pageDescription: string;
+}
+
 export interface AssetRecord {
   id: string;
   name: string;
-  kind: "image" | "icon" | "font";
+  kind: AssetKind;
   url: string;
   origin: AssetOrigin;
   license: string;
@@ -35,13 +70,19 @@ export type FieldType =
   | "text"
   | "textarea"
   | "number"
+  | "range"
   | "color"
   | "select"
   | "boolean"
   | "easing"
   | "trigger"
   | "asset"
-  | "list";
+  | "list"
+  | "radio"
+  | "icon"
+  | "alignment"
+  | "font"
+  | "action";
 
 export interface ParamField {
   key: string;
@@ -56,18 +97,48 @@ export interface ParamField {
 }
 
 export type ComponentType =
+  // layout
   | "container"
+  | "navbar"
+  | "footer"
+  | "hero"
+  | "divider"
+  | "stickyHeader"
+  | "pageTransition"
+  // interaction
   | "tabs"
-  | "card"
-  | "imageHover"
   | "carousel"
   | "searchBar"
-  | "table"
   | "button"
   | "modal"
   | "accordion"
-  | "stickyHeader"
-  | "pageTransition"
+  | "dropdown"
+  | "toggle"
+  | "slider"
+  | "tooltip"
+  | "stepper"
+  | "segmentedControl"
+  // content
+  | "card"
+  | "imageHover"
+  | "table"
+  | "avatar"
+  | "badge"
+  | "rating"
+  | "progress"
+  | "stat"
+  | "testimonial"
+  | "pricing"
+  | "timeline"
+  | "alert"
+  | "videoPlayer"
+  | "codeBlock"
+  | "newsletter"
+  | "breadcrumb"
+  | "marquee"
+  | "iconList"
+  | "gallery"
+  | "features"
   | "rawBlock";
 
 export interface GridBox {
@@ -96,6 +167,7 @@ export interface ProjectSpec {
   projectName: string;
   cols: number;
   rowHeight: number;
+  settings: AppSettings;
   components: ComponentSpec[];
   assets: AssetRecord[];
 }
@@ -113,4 +185,12 @@ export interface ComponentDefinition {
   signature: {
     test: (el: Element) => number; // returns confidence 0..1
   };
+}
+
+export type AlignKind = "left" | "hcenter" | "right" | "top" | "vcenter" | "bottom";
+
+export interface ToastItem {
+  id: string;
+  message: string;
+  action?: "undo" | "redo";
 }

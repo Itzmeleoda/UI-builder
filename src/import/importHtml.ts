@@ -3,6 +3,7 @@ import type { AssetRecord, ComponentSpec, ComponentType, ProjectSpec } from "../
 import { SCHEMA_MIN_SUPPORTED_VERSION, SCHEMA_VERSION } from "../types";
 import { COMPONENT_LIBRARY, PALETTE_TYPES } from "../data/componentLibrary";
 import { sanitizeHtml } from "../utils/sanitize";
+import { DEFAULT_SETTINGS, migrateSpec as migrateSpecShared } from "../utils/migrateSpec";
 
 export interface ImportReport {
   mode: "authored-roundtrip" | "heuristic";
@@ -15,14 +16,6 @@ export interface ImportReport {
 export interface ImportResult {
   project: ProjectSpec;
   report: ImportReport;
-}
-
-function migrateSpec(raw: any): ProjectSpec {
-  // Handle at least N-1 schema version. v1 lacked `assets`; backfill.
-  if (raw.schemaVersion === 1) {
-    return { ...raw, schemaVersion: SCHEMA_VERSION, assets: raw.assets ?? [] };
-  }
-  return raw as ProjectSpec;
 }
 
 function extractParams(type: ComponentType, el: Element): Record<string, unknown> {
@@ -77,6 +70,120 @@ function extractParams(type: ComponentType, el: Element): Record<string, unknown
       return {
         slides: Array.from(el.querySelectorAll(".slide, [data-slide]")).map((s) => s.textContent?.trim() ?? ""),
       };
+    case "navbar":
+      return {
+        logoText: text("strong,b,.logo,span:first-child") ?? "Brand",
+        links: Array.from(el.querySelectorAll("nav a, .links a, a[href]")).map((a) => a.textContent?.trim() ?? ""),
+      };
+    case "footer":
+      return {
+        brandName: text("strong,b,.logo") ?? "Brand",
+        tagline: text("p") ?? "",
+      };
+    case "hero":
+      return {
+        headline: text("h1") ?? "Headline",
+        subheadline: text("h2,p") ?? "",
+        imageUrl: el.querySelector("img")?.getAttribute("src") ?? "",
+      };
+    case "divider":
+      return { label: el.textContent?.trim() ?? "" };
+    case "dropdown": {
+      const items = Array.from(el.querySelectorAll("li, .dropdown-menu > div, [role='menuitem']")).map((i) => i.textContent?.trim() ?? "");
+      return { buttonLabel: text("button") ?? "Menu", items: items.length ? items : undefined };
+    }
+    case "toggle":
+      return { label: el.textContent?.trim() || "Toggle" };
+    case "slider":
+      return {
+        min: Number(el.querySelector("input")?.getAttribute("min") ?? 0),
+        max: Number(el.querySelector("input")?.getAttribute("max") ?? 100),
+        value: Number(el.querySelector("input")?.getAttribute("value") ?? 0),
+      };
+    case "tooltip":
+      return { text: el.getAttribute("data-tooltip") ?? el.textContent?.trim() ?? "" };
+    case "stepper": {
+      const steps = Array.from(el.querySelectorAll("li, .step")).map((s) => s.textContent?.trim() ?? "");
+      return steps.length ? { steps } : {};
+    }
+    case "segmentedControl": {
+      const options = Array.from(el.querySelectorAll("button, .option")).map((o) => o.textContent?.trim() ?? "");
+      return options.length ? { options } : {};
+    }
+    case "avatar":
+      return {
+        imageUrl: el.querySelector("img")?.getAttribute("src") ?? "",
+        name: el.getAttribute("alt") ?? "",
+      };
+    case "badge":
+      return { text: el.textContent?.trim() || "Badge" };
+    case "rating":
+      return { value: Number(el.getAttribute("data-value") ?? el.textContent?.match(/[\d.]+/)?.[0] ?? 5) };
+    case "progress": {
+      const v = el.querySelector("progress")?.getAttribute("value") ?? el.getAttribute("data-value") ?? "50";
+      return { value: Number(v), label: text("label,span") ?? "" };
+    }
+    case "stat":
+      return {
+        value: text("strong,.value,[data-value]") ?? "0",
+        label: text("p,.label") ?? "",
+      };
+    case "testimonial":
+      return {
+        quote: text("blockquote,p") ?? "",
+        author: text("figcaption strong, .author") ?? "",
+        role: text("figcaption span, .role") ?? "",
+        avatarUrl: el.querySelector("img")?.getAttribute("src") ?? "",
+      };
+    case "pricing":
+      return {
+        planName: text("h1,h2,h3,.plan") ?? "Plan",
+        price: el.textContent?.match(/[\d.]+/)?.[0] ?? "29",
+        features: Array.from(el.querySelectorAll("li")).map((li) => li.textContent?.trim() ?? ""),
+        ctaLabel: text("button,a.btn,.cta") ?? "Get started",
+      };
+    case "timeline": {
+      const items = Array.from(el.querySelectorAll(".item, li")).map((i) => i.textContent?.trim() ?? "");
+      return items.length ? { items } : {};
+    }
+    case "alert":
+      return {
+        title: text("strong,h1,h2,h3") ?? "Alert",
+        body: text("p") ?? "",
+      };
+    case "videoPlayer":
+      return {
+        videoUrl: el.querySelector("video")?.getAttribute("src") ?? "",
+        posterUrl: el.querySelector("video")?.getAttribute("poster") ?? "",
+      };
+    case "codeBlock":
+      return {
+        code: el.querySelector("code")?.textContent ?? el.textContent ?? "",
+        language: el.querySelector("code")?.getAttribute("data-language") ?? "",
+      };
+    case "newsletter":
+      return {
+        headline: text("h1,h2,h3") ?? "Subscribe",
+        placeholder: el.querySelector("input")?.getAttribute("placeholder") ?? "",
+        buttonLabel: el.querySelector("button")?.textContent?.trim() ?? "Subscribe",
+      };
+    case "breadcrumb": {
+      const items = Array.from(el.querySelectorAll("a,span")).map((s) => s.textContent?.trim() ?? "").filter((t) => t && t !== "/" && t !== "›" && t !== "•" && t !== "→");
+      return items.length ? { items } : {};
+    }
+    case "marquee": {
+      const items = Array.from(el.querySelectorAll("span")).map((s) => s.textContent?.trim() ?? "").filter(Boolean);
+      return items.length ? { items } : {};
+    }
+    case "iconList":
+    case "features": {
+      const rawItems = Array.from(el.querySelectorAll("li, .item, .feature")).map((i) => i.textContent?.trim() ?? "");
+      return rawItems.length ? { features: rawItems, items: rawItems } : {};
+    }
+    case "gallery":
+      return {
+        images: Array.from(el.querySelectorAll("img")).map((img) => img.getAttribute("src") ?? "").filter(Boolean),
+      };
     default:
       return {};
   }
@@ -127,7 +234,7 @@ export function importHtmlString(html: string, fileName: string): ImportResult {
       if (raw.schemaVersion < SCHEMA_MIN_SUPPORTED_VERSION) {
         throw new Error(`Spec schema v${raw.schemaVersion} is older than the minimum supported v${SCHEMA_MIN_SUPPORTED_VERSION}`);
       }
-      const project = migrateSpec(raw);
+      const project = migrateSpecShared(raw);
       return {
         project,
         report: {
@@ -206,6 +313,7 @@ export function importHtmlString(html: string, fileName: string): ImportResult {
     projectName: fileName.replace(/\.html?$/i, "") || "Imported project",
     cols: 12,
     rowHeight: 60,
+    settings: { ...DEFAULT_SETTINGS, pageTitle: fileName.replace(/\.html?$/i, "") || "Imported project" },
     components,
     assets,
   };

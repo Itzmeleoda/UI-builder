@@ -15,11 +15,13 @@ function slug(name: string) {
 
 export function generateAppTsx(project: ProjectSpec): string {
   const functionBlocks = project.components
-    .filter((c) => !["container", "searchBar", "button", "table"].includes(c.type))
+    .filter((c) => !["container"].includes(c.type))
     .map((c) => generateComponentJsx(c))
     .join("\n\n");
 
-  const inlineTypes = ["container", "searchBar", "button", "table"];
+  // Only the container emits bare JSX (no component function); everything
+  // else generates a self-contained function component.
+  const inlineTypes = ["container"];
 
   const customCodeBlock = (c: (typeof project.components)[number]) =>
     c.customCode && c.type !== "rawBlock"
@@ -30,10 +32,10 @@ export function generateAppTsx(project: ProjectSpec): string {
     .map((c) => {
       const style = `{ gridColumn: "${c.box.x + 1} / span ${c.box.w}", gridRow: "${c.box.y + 1} / span ${c.box.h}" }`;
       if (inlineTypes.includes(c.type)) {
-        return `        <div key="${c.id}" style={${style}}>\n          ${generateComponentJsx(c)}${customCodeBlock(c)}\n        </div>`;
+        return `        <div key="${c.id}" id={\`comp-${c.id}\`} style={${style}}>\n          ${generateComponentJsx(c)}${customCodeBlock(c)}\n        </div>`;
       }
       const varName = `${c.type}_${c.id.slice(0, 6)}`;
-      return `        <div key="${c.id}" style={${style}}>\n          <${varName} />${customCodeBlock(c)}\n        </div>`;
+      return `        <div key="${c.id}" id={\`comp-${c.id}\`} style={${style}}>\n          <${varName} />${customCodeBlock(c)}\n        </div>`;
     })
     .join("\n");
 
@@ -48,7 +50,7 @@ ${functionBlocks}
 
 export default function App() {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(${project.cols}, 1fr)", gridAutoRows: "${project.rowHeight}px", gap: 12, padding: 24 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(${project.cols}, 1fr)", gridAutoRows: "${project.rowHeight}px", gap: 12, padding: 24, fontFamily: ${JSON.stringify(project.settings?.fontFamily ?? "system-ui")} }}>
 ${gridItems}
     </div>
   );
@@ -90,11 +92,18 @@ export default defineConfig({
 }
 
 export function generateIndexHtml(project: ProjectSpec) {
+  const settings = project.settings ?? {};
+  const title = settings.pageTitle || project.projectName;
+  const description = settings.pageDescription || "";
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>${project.projectName}</title>
+    <meta name="description" content="${description.replace(/"/g, "&quot;")}" />
+    <title>${title}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@400;500;600;700&family=Playfair+Display:wght@400;600;700&family=Roboto+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
   </head>
   <body>
     <div id="root"></div>
@@ -168,11 +177,44 @@ export async function buildAndDownloadZip(project: ProjectSpec, opts: ExportOpti
   const zip = new JSZip();
   const root = zip.folder(slug(project.projectName))!;
 
+  // Bundle every local /images/… asset the project references so the exported
+  // app renders images out of the box (blob: uploads can't be bundled).
+  const referenced = new Set<string>();
+  project.components.forEach((c) =>
+    Object.values(c.params).forEach((v) => {
+      if (typeof v === "string" && v.startsWith("/images/")) referenced.add(v);
+      if (Array.isArray(v)) v.forEach((x) => typeof x === "string" && x.startsWith("/images/") && referenced.add(x));
+    })
+  );
+  project.assets.forEach((a) => a.url.startsWith("/images/") && referenced.add(a.url));
+  const publicFolder = root.folder("public")!;
+  const imagesFolder = publicFolder.folder("images")!;
+  await Promise.all(
+    Array.from(referenced).map(async (url) => {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) return;
+        const blob = await res.blob();
+        const parts = url.split("/");
+        const name = parts.pop();
+        const sub = parts[parts.length - 1];
+        const folder = sub && sub !== "images" ? imagesFolder.folder(sub)! : imagesFolder;
+        folder.file(name!, blob);
+      } catch {
+        // network asset — leave as external URL
+      }
+    })
+  );
+
   root.file("package.json", generatePackageJson(project));
   root.file("vite.config.ts", generateViteConfig());
   root.file("index.html", generateIndexHtml(project));
   root.file("src/main.tsx", generateMainTsx());
-  root.file("src/index.css", '@import "tailwindcss";\n');
+  const settings = project.settings;
+  root.file(
+    "src/index.css",
+    `@import "tailwindcss";\n\n:root {\n  --primary: ${settings.primaryColor};\n  --radius: ${settings.borderRadius}px;\n}\n\nbody {\n  font-family: ${settings.fontFamily};\n  -webkit-font-smoothing: antialiased;\n  background: ${settings.canvasBackground};\n}\n`
+  );
   root.file("src/App.tsx", generateAppTsx(project));
   root.file("spec.json", JSON.stringify(project, null, 2));
   root.file("static-preview.html", generateStaticHtml(project));
